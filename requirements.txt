@@ -1,0 +1,4 @@
+# Eidolon Womb — dependencies
+ollama>=0.4.0
+rank_bm25>=0.2.2
+streamlit>=1.40.0
