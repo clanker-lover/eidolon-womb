@@ -175,17 +175,17 @@ async def run(daemon) -> None:
     # Load brain from data/
     await load_brain(daemon, memory_root)
 
-    # Extract being name from loaded identity text (first # heading),
+    # Extract being name from "You are X." on line 1,
     # fall back to BEING_NAME config constant.
+    import re
+
     from core.config import BEING_NAME
 
     parsed_name = ""
     if daemon.identity:
-        for line in daemon.identity.splitlines():
-            line = line.strip()
-            if line.startswith("# "):
-                parsed_name = line[2:].strip()
-                break
+        m = re.match(r"^You are (.+?)\.", daemon.identity.strip())
+        if m:
+            parsed_name = m.group(1).strip()
     daemon._active_being_name = parsed_name or BEING_NAME
     daemon._active_being_id = daemon._active_being_name
     logger.info("Being name: %s", daemon._active_being_name)
