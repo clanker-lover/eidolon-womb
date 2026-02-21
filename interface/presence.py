@@ -1,4 +1,4 @@
-"""Presence detection — what Brandon is doing on his PC.
+"""Presence detection — what Human is doing on his PC.
 
 Requires xdotool and xprintidle to be installed:
     sudo apt install xdotool xprintidle
@@ -11,30 +11,34 @@ import subprocess  # nosec B404 — subprocess needed for desktop interaction (x
 from datetime import datetime
 
 from core.config import (
-    BRANDON_SLEEP_WINDOW_START,
-    BRANDON_SLEEP_WINDOW_END,
+    HUMAN_SLEEP_WINDOW_START,
+    HUMAN_SLEEP_WINDOW_END,
     PRESENCE_TIMEOUT_MINUTES,
     CYCLE_DURATION_MINUTES,
 )
-from remote import run_on_desktop
 
 
-class BrandonStatus(enum.Enum):
+def _run_cmd(cmd: list[str]) -> subprocess.CompletedProcess:
+    """Run a local command (womb runs on the same machine as the desktop)."""
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=10)  # nosec B603 — hardcoded system binaries
+
+
+class HumanStatus(enum.Enum):
     PRESENT = "present"
     AWAY = "away"
     ASLEEP = "asleep"
 
 
 def _in_sleep_window(now: datetime | None = None) -> bool:
-    """Check if current time falls within Brandon's sleep window.
+    """Check if current time falls within Human's sleep window.
 
     Handles midnight crossing (e.g. 22:00-06:00).
     """
     if now is None:
         now = datetime.now()
     current = now.hour * 60 + now.minute
-    start_h, start_m = map(int, BRANDON_SLEEP_WINDOW_START.split(":"))
-    end_h, end_m = map(int, BRANDON_SLEEP_WINDOW_END.split(":"))
+    start_h, start_m = map(int, HUMAN_SLEEP_WINDOW_START.split(":"))
+    end_h, end_m = map(int, HUMAN_SLEEP_WINDOW_END.split(":"))
     start = start_h * 60 + start_m
     end = end_h * 60 + end_m
 
@@ -48,22 +52,22 @@ def _in_sleep_window(now: datetime | None = None) -> bool:
 
 # Projection strings: (time_range, cycle_range)
 _PROJECTIONS = {
-    BrandonStatus.PRESENT: (
+    HumanStatus.PRESENT: (
         "within 30 min - 2.5 hrs",
         "~1-6 cycles",
     ),
-    BrandonStatus.AWAY: (
+    HumanStatus.AWAY: (
         "within 3-6 hours",
         "~7-13 cycles",
     ),
-    BrandonStatus.ASLEEP: (
+    HumanStatus.ASLEEP: (
         "not until morning (after 6 AM)",
         "~13-18 cycles",
     ),
 }
 
 
-def get_brandon_status() -> dict:
+def get_human_status() -> dict:
     """Return structured status with projection for reply timing.
 
     Returns dict with: status, idle_seconds, projection, detail, timestamp.
@@ -74,14 +78,13 @@ def get_brandon_status() -> dict:
 
     # Check screen lock
     try:
-        session_result = run_on_desktop(["loginctl", "list-sessions", "--no-legend"])
+        session_result = _run_cmd(["loginctl", "list-sessions", "--no-legend"])
         for line in session_result.stdout.strip().split("\n"):
             parts = line.split()
             if not parts:
                 continue
-            lock_result = run_on_desktop(
-                ["loginctl", "show-session", parts[0],
-                 "-p", "LockedHint", "--value"]
+            lock_result = _run_cmd(
+                ["loginctl", "show-session", parts[0], "-p", "LockedHint", "--value"]
             )
             if lock_result.stdout.strip() == "yes":
                 screen_locked = True
@@ -94,23 +97,23 @@ def get_brandon_status() -> dict:
 
     if screen_locked or idle >= timeout_seconds:
         if _in_sleep_window(now):
-            status = BrandonStatus.ASLEEP
-            detail = "Brandon is likely asleep (screen locked, sleep window)"
+            status = HumanStatus.ASLEEP
+            detail = "Human is likely asleep (screen locked, sleep window)"
         else:
-            status = BrandonStatus.AWAY
+            status = HumanStatus.AWAY
             if screen_locked:
-                detail = "Brandon is away (screen locked)"
+                detail = "Human is away (screen locked)"
             else:
                 minutes = int(idle / 60)
-                detail = f"Brandon has been away for {minutes} minutes"
+                detail = f"Human has been away for {minutes} minutes"
     else:
-        status = BrandonStatus.PRESENT
+        status = HumanStatus.PRESENT
         window = get_active_window()
         if idle < 120:
-            detail = f"Brandon is at his PC, in {window}"
+            detail = f"Human is at his PC, in {window}"
         else:
             minutes = int(idle / 60)
-            detail = f"Brandon is at his PC (idle {minutes}m), in {window}"
+            detail = f"Human is at his PC (idle {minutes}m), in {window}"
 
     time_proj, cycle_proj = _PROJECTIONS[status]
 
@@ -129,20 +132,22 @@ def format_send_confirmation(status_dict: dict) -> str:
     status = status_dict["status"]
     time_proj = status_dict["projection"]
     cycle_proj = status_dict["cycle_projection"]
-    if status == BrandonStatus.PRESENT:
+    if status == HumanStatus.PRESENT:
         state_str = "at his PC"
-    elif status == BrandonStatus.ASLEEP:
+    elif status == HumanStatus.ASLEEP:
         state_str = "likely asleep"
     else:
         state_str = "away"
     return (
-        f"Message sent to Brandon. "
+        f"Message sent to Human. "
         f"He's currently {state_str} — reply expected {time_proj} ({cycle_proj})."
     )
 
 
-def get_pending_replies(thread_store, being_name: str, current_status: dict) -> list[dict]:
-    """Scan active threads with Brandon where we're awaiting his reply.
+def get_pending_replies(
+    thread_store, being_name: str, current_status: dict
+) -> list[dict]:
+    """Scan active threads with Human where we're awaiting his reply.
 
     Returns list of dicts with: thread_id, subject, last_message_author,
     elapsed_minutes, elapsed_cycles, status_at_send, status_now.
@@ -152,14 +157,14 @@ def get_pending_replies(thread_store, being_name: str, current_status: dict) -> 
 
     threads = thread_store.list_threads(participant=being_name, status="active")
     for thread in threads:
-        if "Brandon" not in thread.participants:
+        if "Human" not in thread.participants:
             continue
         if not thread.messages:
             continue
         last_msg = thread.messages[-1]
-        if last_msg.author == "Brandon":
-            continue  # Brandon already replied
-        # We sent the last message — awaiting Brandon's reply
+        if last_msg.author == "Human":
+            continue  # Human already replied
+        # We sent the last message — awaiting Human's reply
         try:
             sent_at = datetime.fromisoformat(last_msg.timestamp)
             elapsed = (now - sent_at).total_seconds()
@@ -171,18 +176,20 @@ def get_pending_replies(thread_store, being_name: str, current_status: dict) -> 
 
         # Extract status at send time from metadata
         status_at_send = None
-        if last_msg.metadata and "brandon_status" in last_msg.metadata:
-            status_at_send = last_msg.metadata["brandon_status"]
+        if last_msg.metadata and "human_status" in last_msg.metadata:
+            status_at_send = last_msg.metadata["human_status"]
 
-        pending.append({
-            "thread_id": thread.id,
-            "subject": thread.subject,
-            "last_message_author": last_msg.author,
-            "elapsed_minutes": elapsed_minutes,
-            "elapsed_cycles": elapsed_cycles,
-            "status_at_send": status_at_send,
-            "status_now": current_status["detail"],
-        })
+        pending.append(
+            {
+                "thread_id": thread.id,
+                "subject": thread.subject,
+                "last_message_author": last_msg.author,
+                "elapsed_minutes": elapsed_minutes,
+                "elapsed_cycles": elapsed_cycles,
+                "status_at_send": status_at_send,
+                "status_now": current_status["detail"],
+            }
+        )
 
     return pending
 
@@ -190,7 +197,7 @@ def get_pending_replies(thread_store, being_name: str, current_status: dict) -> 
 def get_active_window() -> str:
     """Return the title of the currently focused window, or 'unknown'."""
     try:
-        result = run_on_desktop(["xdotool", "getactivewindow", "getwindowname"])
+        result = _run_cmd(["xdotool", "getactivewindow", "getwindowname"])
         title = result.stdout.strip()
         return title if title else "unknown"
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
@@ -200,7 +207,7 @@ def get_active_window() -> str:
 def get_idle_seconds() -> float:
     """Return seconds since last user input, or 0.0 on failure."""
     try:
-        result = run_on_desktop(["xprintidle"])
+        result = _run_cmd(["xprintidle"])
         ms = int(result.stdout.strip())
         return ms / 1000.0
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError, ValueError):
@@ -208,23 +215,22 @@ def get_idle_seconds() -> float:
 
 
 def get_presence_status() -> str:
-    """Return a human-readable string describing Brandon's presence."""
+    """Return a human-readable string describing Human's presence."""
     # Check screen lock via loginctl
     try:
         # Find the first active session
-        session_result = run_on_desktop(["loginctl", "list-sessions", "--no-legend"])
+        session_result = _run_cmd(["loginctl", "list-sessions", "--no-legend"])
         sessions = session_result.stdout.strip().split("\n")
         for line in sessions:
             parts = line.split()
             if not parts:
                 continue
             session_id = parts[0]
-            lock_result = run_on_desktop(
-                ["loginctl", "show-session", session_id,
-                 "-p", "LockedHint", "--value"]
+            lock_result = _run_cmd(
+                ["loginctl", "show-session", session_id, "-p", "LockedHint", "--value"]
             )
             if lock_result.stdout.strip() == "yes":
-                return "Brandon is away (screen locked)"
+                return "Human is away (screen locked)"
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
 
@@ -232,23 +238,23 @@ def get_presence_status() -> str:
     window = get_active_window()
 
     if idle < 120:
-        return f"Brandon is at his PC, in {window}"
+        return f"Human is at his PC, in {window}"
     elif idle < 600:
         minutes = int(idle / 60)
-        return f"Brandon has been idle for {minutes} minutes (last seen in {window})"
+        return f"Human has been idle for {minutes} minutes (last seen in {window})"
     else:
-        return "Brandon is away from his PC"
+        return "Human is away from his PC"
 
 
-def is_brandon_away() -> bool:
-    """Return True if Brandon is away (screen locked or idle >= 10 min)."""
+def is_human_away() -> bool:
+    """Return True if Human is away (screen locked or idle >= 10 min)."""
     try:
-        result = run_on_desktop(["loginctl", "list-sessions", "--no-legend"])
+        result = _run_cmd(["loginctl", "list-sessions", "--no-legend"])
         for line in result.stdout.strip().split("\n"):
             parts = line.split()
             if not parts:
                 continue
-            lock = run_on_desktop(
+            lock = _run_cmd(
                 ["loginctl", "show-session", parts[0], "-p", "LockedHint", "--value"]
             )
             if lock.stdout.strip() == "yes":

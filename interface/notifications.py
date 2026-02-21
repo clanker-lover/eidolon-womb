@@ -5,7 +5,7 @@ import logging
 import time
 from datetime import datetime
 
-from interface.presence import is_brandon_away, get_brandon_status
+from interface.presence import is_human_away, get_human_status
 from interface.tools import fire_notify_send
 from core.threads import ThreadMessage
 from core.config import NOTIFICATION_CHECK_INTERVAL, NOTIFICATION_COOLDOWN
@@ -14,31 +14,35 @@ logger = logging.getLogger("companion_daemon")
 
 
 def queue_notification(daemon, message: str) -> str:
-    """Queue a notification for delivery when Brandon is at his PC.
+    """Queue a notification for delivery when Human is at his PC.
 
     Accesses: daemon.pending_notifications, daemon._active_being_name,
     daemon.notification_seen, daemon._notified_this_cycle, daemon._thread_store
     """
     if any(n["message"] == message for n in daemon.pending_notifications):
         logger.info("Notification duplicate skipped: %s", message[:80])
-        return "Notification already queued — will be delivered when Brandon is at his PC."
-    daemon.pending_notifications.append({
-        "being": daemon._active_being_name,
-        "message": message,
-    })
+        return (
+            "Notification already queued — will be delivered when Human is at his PC."
+        )
+    daemon.pending_notifications.append(
+        {
+            "being": daemon._active_being_name,
+            "message": message,
+        }
+    )
     daemon.notification_seen = False
     daemon._notified_this_cycle = True
-    # Also persist to thread system with Brandon's status at send time
+    # Also persist to thread system with Human's status at send time
     try:
         if daemon._thread_store:
             metadata = None
             try:
-                status_dict = get_brandon_status()
-                metadata = {"brandon_status": status_dict["detail"]}
+                status_dict = get_human_status()
+                metadata = {"human_status": status_dict["detail"]}
             except Exception:
                 pass  # nosec B110 — status fetch failure is non-critical for notifications
             thread = daemon._thread_store.find_or_create_thread(
-                [daemon._active_being_name, "Brandon"],
+                [daemon._active_being_name, "Human"],
                 subject=f"Message from {daemon._active_being_name}",
             )
             daemon._thread_store.append_message(
@@ -53,7 +57,7 @@ def queue_notification(daemon, message: str) -> str:
     except Exception as e:
         logger.error("Failed to persist notification to thread: %s", e)
     logger.info("Notification queued (%s): %s", daemon._active_being_name, message[:80])
-    return "Notification queued — will be delivered when Brandon is at his PC."
+    return "Notification queued — will be delivered when Human is at his PC."
 
 
 async def check_presence_and_notifications(daemon) -> None:
@@ -66,7 +70,7 @@ async def check_presence_and_notifications(daemon) -> None:
     daemon.notification_sent_at
     """
     try:
-        current_away = await asyncio.to_thread(is_brandon_away)
+        current_away = await asyncio.to_thread(is_human_away)
         if current_away != daemon._last_presence_away:
             logger.info("Presence changed, starting fresh thought chain.")
             daemon._idle_history = []

@@ -94,14 +94,17 @@ def generate_eidolon_notes(
             model=model_name,
             messages=[
                 {"role": "system", "content": f"{identity_text}\n\n{personality_text}"},
-                {"role": "user", "content": f"{EIDOLON_REFLECTION_PROMPT}\n\n{transcript}"},
+                {
+                    "role": "user",
+                    "content": f"{EIDOLON_REFLECTION_PROMPT}\n\n{transcript}",
+                },
             ],
             stream=False,
             options={"temperature": 0.3, "num_ctx": context_window},
         )
         notes = response["message"]["content"].strip()
     except Exception as e:
-        print(f"Eidolon notes error: {e}", file=sys.stderr)
+        print(f"Notes generation error: {e}", file=sys.stderr)
         return None
 
     if not notes:
@@ -131,10 +134,7 @@ def extract_facts(
     context_window: int,
 ) -> list[str]:
     try:
-        prompt = (
-            f"{extraction_prompt}\n\n"
-            f"User: {user_message}"
-        )
+        prompt = f"{extraction_prompt}\n\nUser: {user_message}"
         response = ollama.chat(
             model=model_name,
             messages=[{"role": "user", "content": prompt}],

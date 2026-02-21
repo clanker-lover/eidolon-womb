@@ -48,7 +48,9 @@ def ensure_relationship(
     if os.path.exists(path):
         with open(path, "r") as f:
             return f.read()
-    facts_str = "\n".join(f"- {f}" for f in seed_facts) if seed_facts else "- (none yet)"
+    facts_str = (
+        "\n".join(f"- {f}" for f in seed_facts) if seed_facts else "- (none yet)"
+    )
     content = _TEMPLATE.format(name=other_name, facts=facts_str)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
@@ -61,7 +63,5 @@ def list_relationships(project_root: str, memory_path: str) -> list[str]:
     if not os.path.isdir(directory):
         return []
     return sorted(
-        os.path.splitext(f)[0]
-        for f in os.listdir(directory)
-        if f.endswith(".md")
+        os.path.splitext(f)[0] for f in os.listdir(directory) if f.endswith(".md")
     )

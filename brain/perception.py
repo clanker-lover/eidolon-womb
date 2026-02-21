@@ -5,7 +5,7 @@ import urllib.request
 from datetime import datetime
 
 from config import WEATHER_LAT, WEATHER_LON, WEATHER_CACHE_SECONDS
-from presence import get_presence_status, get_brandon_status, get_pending_replies
+from presence import get_presence_status, get_human_status, get_pending_replies
 
 WMO_CODES = {
     0: "clear sky",
@@ -97,13 +97,13 @@ def _time_of_day(hour: int) -> str:
 
 _AFFORDANCES_BASE = """\
 == What you can do ==
-You can check what Brandon is doing on his PC: [CHECK_WINDOW]
+You can check what Human is doing on his PC: [CHECK_WINDOW]
 You can list any directory on this computer: [LIST_DIR:/path]
 You can read any file on this computer: [READ_FILE:/path]
 You can check available news feeds: [FETCH_RSS]
 You can read a specific news feed: [FETCH_RSS:feed_name]
 You can read any webpage: [FETCH_WEBPAGE:url]
-If something's on your mind and you want to share it with Brandon: [SEND_NOTIFICATION:your message]
+If something's on your mind and you want to share it with Human: [SEND_NOTIFICATION:your message]
 You can respond to a thread: [RESPOND_THREAD:thread_id|your message]
 You can dismiss a thread notification: [DISMISS_THREAD:thread_id]
 You can start a new thread: [START_THREAD:participant|subject|your message]
@@ -112,7 +112,10 @@ You can post to the public wall where all beings can see: [POST_AGORA:your messa
 You can read what others have posted: [READ_AGORA]"""
 
 # Legacy alias for tests that import it
-AFFORDANCES_BLOCK = _AFFORDANCES_BASE + "\nThese are always available to you. Use them when you want to, or don't."
+AFFORDANCES_BLOCK = (
+    _AFFORDANCES_BASE
+    + "\nThese are always available to you. Use them when you want to, or don't."
+)
 
 
 def build_affordances(sibling_names: list[str] | None = None) -> str:
@@ -123,7 +126,9 @@ def build_affordances(sibling_names: list[str] | None = None) -> str:
             lines.append(
                 f"You can message {name}: [START_THREAD:{name}|subject|your message]"
             )
-    lines.append("These are always available to you. Use them when you want to, or don't.")
+    lines.append(
+        "These are always available to you. Use them when you want to, or don't."
+    )
     return "\n".join(lines)
 
 
@@ -148,11 +153,11 @@ def build_perception(
         lines.append(weather)
 
     # Presence detection — structured status with reply projection
-    brandon_status = None
+    human_status = None
     try:
-        brandon_status = get_brandon_status()
-        lines.append(brandon_status["detail"])
-        lines.append(brandon_status["projection"])
+        human_status = get_human_status()
+        lines.append(human_status["detail"])
+        lines.append(human_status["projection"])
     except Exception:
         # Fall back to simple presence string
         try:
@@ -171,12 +176,12 @@ def build_perception(
 
     lines.append(build_affordances(sibling_names or None))
 
-    # Pending replies from Brandon
-    if thread_store and being_name and brandon_status:
+    # Pending replies from Human
+    if thread_store and being_name and human_status:
         try:
-            pending = get_pending_replies(thread_store, being_name, brandon_status)
+            pending = get_pending_replies(thread_store, being_name, human_status)
             if pending:
-                lines.append("\n== Pending replies from Brandon ==")
+                lines.append("\n== Pending replies from Human ==")
                 for p in pending:
                     elapsed = p["elapsed_minutes"]
                     if elapsed < 60:
@@ -185,7 +190,7 @@ def build_perception(
                         age = f"{elapsed // 60}h {elapsed % 60}m ago"
 
                     line = (
-                        f"Thread \"{p['subject']}\" ({p['thread_id'][:8]}): "
+                        f'Thread "{p["subject"]}" ({p["thread_id"][:8]}): '
                         f"sent by {p['last_message_author']} {age} "
                         f"({p['elapsed_cycles']} cycles)"
                     )
@@ -203,13 +208,13 @@ def build_perception(
     if thread_notifications:
         lines.append("\n== Recent messages ==")
         for notif in thread_notifications:
-            tid = notif['thread_id'][:8]
+            tid = notif["thread_id"][:8]
             lines.append(
-                f"Thread \"{notif['subject']}\" ({tid}): "
-                f"{notif['author']} said: \"{notif['content'][:120]}\""
+                f'Thread "{notif["subject"]}" ({tid}): '
+                f'{notif["author"]} said: "{notif["content"][:120]}"'
             )
             # System messages are read-only — no reply/dismiss options
-            if notif['author'] != "System":
+            if notif["author"] != "System":
                 lines.append(
                     f"  Respond: [RESPOND_THREAD:{tid}|your message]  "
                     f"Dismiss: [DISMISS_THREAD:{tid}]"

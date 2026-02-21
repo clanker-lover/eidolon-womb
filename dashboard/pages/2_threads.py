@@ -1,28 +1,56 @@
-"""Threads — unified communication interface replacing Mail and Chat."""
+"""Threads — communication between human and being."""
 
-import os
-import sys
 import streamlit as st
 from datetime import datetime
 
-# Ensure imports work
-sys.path.insert(0, os.path.expanduser("~/eidolon"))
-
 from utils import (
-    load_registry, get_project_root, get_thread_store,
-    format_timestamp, format_timestamp_short, send_thread_reply,
+    get_thread_store,
+    peek_daemon,
+    format_timestamp,
+    format_timestamp_short,
+    get_user_name,
 )
 
 st.header("Threads")
 
-registry = load_registry()
-beings = registry.list_beings()
-root = get_project_root()
 thread_store = get_thread_store()
 
 if thread_store is None:
     st.error("Thread store not available. Ensure data/threads/ directory exists.")
     st.stop()
+
+# Get being name from daemon (for reply routing)
+_daemon_status = peek_daemon()
+_being_name = None
+if _daemon_status:
+    beings = _daemon_status.get("beings", [])
+    if beings:
+        _being_name = beings[0].get("name", "Being")
+_user_display_name = get_user_name()
+
+
+_HISTORICAL_BEING_NAMES = {"Being", "Eidolon"}
+
+
+def _display_name(author: str) -> str:
+    """Map internal author names to display names."""
+    if author == "Human":
+        return _user_display_name
+    if author in _HISTORICAL_BEING_NAMES and _being_name:
+        return _being_name
+    return author
+
+
+def _display_subject(subject: str) -> str:
+    """Replace historical being names in thread subjects with current name."""
+    if not _being_name:
+        return subject
+    result = subject
+    for old_name in _HISTORICAL_BEING_NAMES:
+        if old_name != _being_name and old_name in result:
+            result = result.replace(old_name, _being_name)
+    return result
+
 
 # --- Session state defaults ---
 if "selected_thread_id" not in st.session_state:
@@ -34,9 +62,9 @@ PREVIEW_COUNT = 5
 
 
 def has_unread(thread) -> bool:
-    """Check if thread has unread messages for Brandon."""
+    """Check if thread has unread messages for Human."""
     for msg in thread.messages:
-        if msg.author != "Brandon" and "Brandon" not in (msg.read_by or []):
+        if msg.author != "Human" and "Human" not in (msg.read_by or []):
             return True
     return False
 
@@ -44,12 +72,19 @@ def has_unread(thread) -> bool:
 # --- Filters ---
 col_filter1, col_filter2 = st.columns(2)
 with col_filter1:
-    participant_names = ["All"] + ["Brandon"] + [b.name for b in beings]
-    filter_participant = st.selectbox("Filter by participant", participant_names)
+    participant_names = ["All", "Human"]
+    if _being_name:
+        participant_names.append(_being_name)
+    display_names = ["All", _user_display_name]
+    if _being_name:
+        display_names.append(_display_name(_being_name))
+    filter_display = st.selectbox("Filter by participant", display_names)
 with col_filter2:
     filter_status = st.selectbox("Filter by status", ["active", "dormant", "all"])
 
-# Apply filters
+# Apply filters — map display name back to internal
+_filter_map = dict(zip(display_names, participant_names))
+filter_participant = _filter_map.get(filter_display, filter_display)
 participant = None if filter_participant == "All" else filter_participant
 status = None if filter_status == "all" else filter_status
 threads = thread_store.list_threads(participant=participant, status=status)
@@ -63,21 +98,21 @@ with list_col:
     if not threads:
         st.info("No threads found.")
     else:
-        # Scrollable thread list via container with fixed height
         thread_container = st.container(height=500)
         with thread_container:
             for thread in threads:
                 unread = has_unread(thread)
                 dot = "🟢 " if unread else ""
                 msg_count = len(thread.messages)
-                participants_str = ", ".join(thread.participants)
+                participants_str = ", ".join(
+                    _display_name(p) for p in thread.participants
+                )
                 time_str = format_timestamp(thread.last_activity)
 
-                # Highlight selected thread
                 is_selected = st.session_state.selected_thread_id == thread.id
 
                 if st.button(
-                    f"{dot}{thread.subject}\n{participants_str} · {msg_count} msgs · {time_str}",
+                    f"{dot}{_display_subject(thread.subject)}\n{participants_str} · {msg_count} msgs · {time_str}",
                     key=f"thread_{thread.id}",
                     use_container_width=True,
                     type="primary" if is_selected else "secondary",
@@ -90,12 +125,10 @@ with thread_col:
     selected_thread = None
 
     if selected_id:
-        # Find thread in already-loaded list (avoids extra disk read)
         for t in threads:
             if t.id == selected_id:
                 selected_thread = t
                 break
-        # If not in filtered list, load directly
         if selected_thread is None:
             selected_thread = thread_store.get_thread(selected_id)
 
@@ -103,9 +136,13 @@ with thread_col:
         st.info("Select a thread from the list.")
     else:
         thread = selected_thread
-        status_icon = {"active": "🟢", "dormant": "🟡", "closed": "⚫"}.get(thread.status, "⚪")
-        st.subheader(f"{status_icon} {thread.subject}")
-        st.caption(f"{', '.join(thread.participants)} · {thread.status} · last activity {format_timestamp(thread.last_activity)}")
+        status_icon = {"active": "🟢", "dormant": "🟡", "closed": "⚫"}.get(
+            thread.status, "⚪"
+        )
+        st.subheader(f"{status_icon} {_display_subject(thread.subject)}")
+        st.caption(
+            f"{', '.join(_display_name(p) for p in thread.participants)} · {thread.status} · last activity {format_timestamp(thread.last_activity)}"
+        )
 
         if thread.summary:
             st.caption(f"Summary: {thread.summary}")
@@ -117,7 +154,10 @@ with thread_col:
 
         if total > PREVIEW_COUNT and not show_all:
             hidden = total - PREVIEW_COUNT
-            if st.button(f"Load {hidden} earlier message{'s' if hidden != 1 else ''}", key=f"loadmore_{thread.id}"):
+            if st.button(
+                f"Load {hidden} earlier message{'s' if hidden != 1 else ''}",
+                key=f"loadmore_{thread.id}",
+            ):
                 st.session_state.show_all_messages.add(thread.id)
                 st.rerun()
             visible = messages[-PREVIEW_COUNT:]
@@ -127,85 +167,76 @@ with thread_col:
         msg_container = st.container(height=400)
         with msg_container:
             for msg in visible:
-                is_brandon = msg.author == "Brandon"
-                avatar = "👤" if is_brandon else "🤖"
-                with st.chat_message("user" if is_brandon else "assistant", avatar=avatar):
-                    st.caption(f"**{msg.author}** — {format_timestamp_short(msg.timestamp)}")
+                is_human = msg.author == "Human"
+                avatar = "👤" if is_human else "🤖"
+                with st.chat_message(
+                    "user" if is_human else "assistant", avatar=avatar
+                ):
+                    st.caption(
+                        f"**{_display_name(msg.author)}** — {format_timestamp_short(msg.timestamp)}"
+                    )
                     st.write(msg.content)
 
         # Mark as read when viewing
         if has_unread(thread):
-            thread_store.mark_thread_read(thread.id, "Brandon")
+            thread_store.mark_thread_read(thread.id, "Human")
 
         # --- Reply form ---
         st.divider()
-        being_names = [b.name for b in beings]
         reply_key = f"reply_{thread.id}"
 
         with st.form(reply_key):
-            col_a, col_b = st.columns([1, 3])
-            with col_a:
-                reply_as = st.selectbox(
-                    "Reply as",
-                    ["Brandon (direct)"] + being_names,
-                    key=f"replyas_{thread.id}",
-                )
-            with col_b:
-                reply_text = st.text_area(
-                    "Message", height=80, key=f"replytext_{thread.id}"
-                )
+            reply_text = st.text_area(
+                "Message", height=80, key=f"replytext_{thread.id}"
+            )
             submitted = st.form_submit_button("Send")
 
             if submitted and reply_text.strip():
-                if reply_as == "Brandon (direct)":
-                    from core.threads import ThreadMessage
-                    thread_store.append_message(
-                        thread.id,
-                        ThreadMessage(
-                            author="Brandon",
-                            content=reply_text.strip(),
-                            timestamp=datetime.now().isoformat(),
-                        ),
-                    )
-                    thread_store.mark_thread_read(thread.id, "Brandon")
-                    st.success("Message sent.")
-                    st.rerun()
-                else:
-                    with st.spinner(f"{reply_as} is thinking..."):
-                        response = send_thread_reply(
-                            reply_as, thread.id, reply_text.strip()
-                        )
-                    if response and response.get("type") == "response":
-                        thread_store.mark_thread_read(thread.id, "Brandon")
-                        st.success(f"{reply_as}: {response['content'][:200]}")
-                        st.rerun()
-                    elif response and response.get("type") == "error":
-                        st.error(response.get("content", "Unknown error"))
-                    else:
-                        st.error("No response from daemon. Is it running?")
+                from core.threads import ThreadMessage
+
+                thread_store.append_message(
+                    thread.id,
+                    ThreadMessage(
+                        author="Human",
+                        content=reply_text.strip(),
+                        timestamp=datetime.now().isoformat(),
+                    ),
+                )
+                thread_store.mark_thread_read(thread.id, "Human")
+                st.success("Message sent.")
+                st.rerun()
 
 # --- Compose New Thread ---
 st.divider()
 st.subheader("New Thread")
 
-being_names = [b.name for b in beings]
-all_participants = ["Brandon"] + being_names
+all_participants = ["Human"]
+if _being_name:
+    all_participants.append(_being_name)
+# Display names for the UI
+_participant_display = {p: _display_name(p) for p in all_participants}
 
 with st.form("compose_thread"):
     col1, col2 = st.columns(2)
     with col1:
-        selected_participants = st.multiselect(
+        display_options = [_participant_display[p] for p in all_participants]
+        selected_display = st.multiselect(
             "Participants",
-            all_participants,
-            default=["Brandon"],
+            display_options,
+            default=display_options,
         )
     with col2:
         subject = st.text_input("Subject")
     initial_message = st.text_area("Message", height=100)
-    compose_as = st.selectbox("Send as", ["Brandon"] + being_names)
+    compose_as = st.selectbox("Send as", [_user_display_name])
     submitted = st.form_submit_button("Start Thread")
 
     if submitted:
+        # Map display names back to internal names
+        _display_to_internal = {v: k for k, v in _participant_display.items()}
+        selected_participants = [
+            _display_to_internal.get(d, d) for d in selected_display
+        ]
         if len(selected_participants) < 2:
             st.error("A thread needs at least 2 participants.")
         elif not subject.strip():
@@ -214,8 +245,9 @@ with st.form("compose_thread"):
             st.error("Message is required.")
         else:
             from core.threads import ThreadMessage
+
             msg = ThreadMessage(
-                author=compose_as,
+                author="Human",
                 content=initial_message.strip(),
                 timestamp=datetime.now().isoformat(),
             )

@@ -68,6 +68,7 @@ def consolidate_memories(
     personality: str = "",
     live_thoughts: list[str] | None = None,
     memory_root: str | None = None,
+    being_name: str = "Eidolon",
 ) -> str | None:
     """Run sleep consolidation: distill recent memories into long-term storage.
 
@@ -104,7 +105,7 @@ def consolidate_memories(
                 parts.append(f"### {os.path.basename(path)}\n{text}\n")
 
     if data["notes"]:
-        parts.append("## Eidolon Notes\n")
+        parts.append(f"## {being_name} Notes\n")
         for path in data["notes"]:
             with open(path, "r") as f:
                 text = f.read().strip()
@@ -119,8 +120,12 @@ def consolidate_memories(
     # Generate consolidation
     messages = []
     if identity or personality:
-        messages.append({"role": "system", "content": f"{identity}\n\n{personality}".strip()})
-    messages.append({"role": "user", "content": f"{CONSOLIDATION_PROMPT}\n\n{input_text}"})
+        messages.append(
+            {"role": "system", "content": f"{identity}\n\n{personality}".strip()}
+        )
+    messages.append(
+        {"role": "user", "content": f"{CONSOLIDATION_PROMPT}\n\n{input_text}"}
+    )
 
     response = ollama.chat(
         model=model_name,
@@ -179,17 +184,28 @@ def partial_consolidate(
         return None, thoughts or []
 
     split_idx = round(len(thoughts) * ratio)
-    split_idx = max(1, min(split_idx, len(thoughts) - 1))  # Keep at least 1 on each side
+    split_idx = max(
+        1, min(split_idx, len(thoughts) - 1)
+    )  # Keep at least 1 on each side
     to_consolidate = thoughts[:split_idx]
     to_keep = thoughts[split_idx:]
 
     actual_ratio = split_idx / len(thoughts)
-    logger.info("Partial consolidation: %d/%d thoughts (%.0f%%), keeping %d",
-                split_idx, len(thoughts), actual_ratio * 100, len(thoughts) - split_idx)
+    logger.info(
+        "Partial consolidation: %d/%d thoughts (%.0f%%), keeping %d",
+        split_idx,
+        len(thoughts),
+        actual_ratio * 100,
+        len(thoughts) - split_idx,
+    )
 
     result = consolidate_memories(
-        project_root, model_name, context_window,
-        identity, personality, to_consolidate,
+        project_root,
+        model_name,
+        context_window,
+        identity,
+        personality,
+        to_consolidate,
         memory_root=memory_root,
     )
 
@@ -244,7 +260,12 @@ def update_relationships(
         try:
             messages = []
             if identity or personality:
-                messages.append({"role": "system", "content": f"{identity}\n\n{personality}".strip()})
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": f"{identity}\n\n{personality}".strip(),
+                    }
+                )
             messages.append({"role": "user", "content": prompt})
             response = ollama.chat(
                 model=model_name,
@@ -255,9 +276,13 @@ def update_relationships(
             updated = response["message"]["content"].strip()
             if updated and len(updated) > 20:
                 save_relationship(project_root, memory_path, other_name, updated)
-                logger.info("Updated relationship file for %s -> %s", being_name, other_name)
+                logger.info(
+                    "Updated relationship file for %s -> %s", being_name, other_name
+                )
         except Exception as e:
-            logger.error("Failed to update relationship %s -> %s: %s", being_name, other_name, e)
+            logger.error(
+                "Failed to update relationship %s -> %s: %s", being_name, other_name, e
+            )
 
 
 def refresh_thread_summaries(
@@ -283,8 +308,7 @@ def refresh_thread_summaries(
         prompt = (
             f"Summarize this thread in 1-2 sentences. "
             f"Participants: {', '.join(thread.participants)}. "
-            f"Subject: {thread.subject}.\n\n"
-            + "\n".join(convo_lines)
+            f"Subject: {thread.subject}.\n\n" + "\n".join(convo_lines)
         )
 
         try:
@@ -299,4 +323,6 @@ def refresh_thread_summaries(
                 thread_store.update_summary(thread.id, summary)
                 logger.info("Refreshed summary for thread %s", thread.id[:8])
         except Exception as e:
-            logger.error("Failed to refresh summary for thread %s: %s", thread.id[:8], e)
+            logger.error(
+                "Failed to refresh summary for thread %s: %s", thread.id[:8], e
+            )

@@ -10,22 +10,22 @@ from datetime import datetime
 
 @dataclass
 class ThreadMessage:
-    author: str          # "Eidolon", "Psyche", "Brandon", "System"
+    author: str  # Being name, "Human", or "System"
     content: str
-    timestamp: str       # ISO 8601
-    metadata: dict | None = None  # Optional: brandon_status at send time, etc.
+    timestamp: str  # ISO 8601
+    metadata: dict | None = None  # Optional: human_status at send time, etc.
     read_by: list[str] = field(default_factory=list)  # Participants who have seen this
 
 
 @dataclass
 class Thread:
-    id: str              # uuid4
-    participants: list[str]  # names (not IDs — Brandon has no being_id)
+    id: str  # uuid4
+    participants: list[str]  # names (not IDs — Human has no being_id)
     subject: str
     created: str
     last_activity: str
-    status: str          # "active" | "dormant" | "closed"
-    summary: str         # auto-generated gist
+    status: str  # "active" | "dormant" | "closed"
+    summary: str  # auto-generated gist
     messages: list[ThreadMessage] = field(default_factory=list)
 
 
@@ -36,8 +36,9 @@ class ThreadStore:
     data loss from concurrent access (e.g. asyncio.to_thread workers).
     """
 
-    def __init__(self, threads_dir: str):
+    def __init__(self, threads_dir: str, aliases: dict[str, set[str]] | None = None):
         self._dir = threads_dir
+        self._aliases: dict[str, set[str]] = aliases or {}
         os.makedirs(self._dir, exist_ok=True)
 
     def _thread_path(self, thread_id: str) -> str:
@@ -140,6 +141,10 @@ class ThreadStore:
         threads: list[Thread] = []
         if not os.path.isdir(self._dir):
             return threads
+        # Build match set: participant + any aliases
+        match_names: set[str] | None = None
+        if participant:
+            match_names = {participant} | self._aliases.get(participant, set())
         for fname in os.listdir(self._dir):
             if not fname.endswith(".json"):
                 continue
@@ -147,7 +152,7 @@ class ThreadStore:
             thread = self._load_thread(thread_id)
             if thread is None:
                 continue
-            if participant and participant not in thread.participants:
+            if match_names and not match_names.intersection(thread.participants):
                 continue
             if status and thread.status != status:
                 continue
@@ -213,14 +218,15 @@ class ThreadStore:
         participant: str,
         since: str | None = None,
     ) -> list[tuple[Thread, ThreadMessage]]:
+        match_names = {participant} | self._aliases.get(participant, set())
         results = []
         for thread in self.list_threads(participant=participant):
             for msg in reversed(thread.messages):
-                if msg.author == participant:
+                if msg.author in match_names:
                     continue
                 if since and msg.timestamp <= since:
                     break  # Older messages won't match either
-                if participant in (msg.read_by or []):
+                if match_names.intersection(msg.read_by or []):
                     break  # Hit a read message — everything before it is also read
                 results.append((thread, msg))
         results.sort(key=lambda x: x[1].timestamp, reverse=True)

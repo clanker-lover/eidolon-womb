@@ -1,6 +1,8 @@
 """Backward-compat stub. Real module: interface.tools"""
+
 import sys
 from interface import tools as _real
+
 sys.modules[__name__] = _real
 
 # Re-export for mypy (sys.modules swap is invisible to static analysis)

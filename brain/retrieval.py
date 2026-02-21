@@ -53,7 +53,7 @@ class MemoryIndex:
                     if line:
                         self._chunks.append({"text": line, "source": f"facts.md:{i}"})
 
-        # 3. Eidolon notes
+        # 3. Session notes
         pattern = os.path.join(self._data_dir, "conversations", "*_notes.md")
         for path in glob.glob(pattern):
             with open(path, "r") as f:
@@ -67,7 +67,9 @@ class MemoryIndex:
             with open(path, "r") as f:
                 text = f.read().strip()
             if text:
-                self._chunks.append({"text": text, "source": f"consolidated/{os.path.basename(path)}"})
+                self._chunks.append(
+                    {"text": text, "source": f"consolidated/{os.path.basename(path)}"}
+                )
 
         # Build BM25 index
         if self._chunks:
@@ -109,7 +111,7 @@ class MemoryIndex:
             return json.loads(row[0])
 
         # Truncate to fit embedding model context window
-        embed_text = text[:self._EMBED_MAX_CHARS]
+        embed_text = text[: self._EMBED_MAX_CHARS]
 
         # Compute via ollama
         try:
@@ -181,7 +183,11 @@ class MemoryIndex:
 
         # Rank and filter
         scored = [
-            {"text": self._chunks[i]["text"], "source": self._chunks[i]["source"], "score": final_scores[i]}
+            {
+                "text": self._chunks[i]["text"],
+                "source": self._chunks[i]["source"],
+                "score": final_scores[i],
+            }
             for i in range(n)
             if final_scores[i] > 0
         ]

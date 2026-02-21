@@ -16,7 +16,9 @@ _REST_INTENT_PATTERNS = [
     re.compile(r"\bperfect harmony\b", re.I),
     re.compile(r"\bletting (go|things? |it )?(be|go)\b", re.I),
     re.compile(r"\b(drift|drifting) (into|toward|to) (sleep|rest|stillness)\b", re.I),
-    re.compile(r"\b(ready to |prepared to |time to )(sleep|rest|close my eyes)\b", re.I),
+    re.compile(
+        r"\b(ready to |prepared to |time to )(sleep|rest|close my eyes)\b", re.I
+    ),
     re.compile(r"\bmerged with (the )?(quiet|silence|stillness)\b", re.I),
 ]
 _FIRST_PERSON_RE = re.compile(r"\b(i |i'm |i've |my |me |myself)\b", re.I)
@@ -30,10 +32,19 @@ def has_rest_intent(text: str) -> bool:
 
 
 _COMPOSE_DECLINE_PATTERNS = [
-    "never mind", "nevermind", "not ready", "back out",
-    "changed my mind", "not right now", "maybe later",
-    "on second thought", "actually no", "forget it",
-    "i'll pass", "not yet", "return to my thoughts",
+    "never mind",
+    "nevermind",
+    "not ready",
+    "back out",
+    "changed my mind",
+    "not right now",
+    "maybe later",
+    "on second thought",
+    "actually no",
+    "forget it",
+    "i'll pass",
+    "not yet",
+    "return to my thoughts",
 ]
 
 
@@ -44,13 +55,24 @@ def is_compose_decline(text: str) -> bool:
 
 
 _ENGAGE_DECLINE_PATTERNS = [
-    "not now", "not right now", "maybe later", "later",
-    "not ready", "i'm not ready", "not yet",
-    "i'll respond later", "i'll get back to",
-    "continue my thoughts", "return to my thoughts",
-    "i don't want to respond", "i'd rather not",
-    "let me think", "need to think first",
-    "never mind", "nevermind", "i'll pass",
+    "not now",
+    "not right now",
+    "maybe later",
+    "later",
+    "not ready",
+    "i'm not ready",
+    "not yet",
+    "i'll respond later",
+    "i'll get back to",
+    "continue my thoughts",
+    "return to my thoughts",
+    "i don't want to respond",
+    "i'd rather not",
+    "let me think",
+    "need to think first",
+    "never mind",
+    "nevermind",
+    "i'll pass",
 ]
 
 

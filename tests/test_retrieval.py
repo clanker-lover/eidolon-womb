@@ -24,23 +24,23 @@ def _make_data_dir(tmpdir):
     # Session summaries
     summaries = {
         "2026-02-10_1400_summary.md": (
-            "I talked with Brandon about Stephanie and how she's been feeling lately. "
+            "I talked with Human about Stephanie and how she's been feeling lately. "
             "He seemed worried about her health."
         ),
         "2026-02-11_0900_summary.md": (
-            "Brandon asked me about deploying models on the Jetson Orin Nano. "
+            "Human asked me about deploying models on the Jetson Orin Nano. "
             "We discussed hardware constraints and quantization."
         ),
         "2026-02-12_1000_summary.md": (
-            "We talked about naming — Brandon is thinking about what to call me. "
+            "We talked about naming — Human is thinking about what to call me. "
             "He considered several options."
         ),
         "2026-02-13_1100_summary.md": (
-            "Brandon opened up about his agoraphobia and how it affects his daily life. "
+            "Human opened up about his agoraphobia and how it affects his daily life. "
             "I tried to be supportive without overstepping."
         ),
         "2026-02-14_1500_summary.md": (
-            "We talked about Brandon's hobby of building electronics projects. "
+            "We talked about Human's hobby of building electronics projects. "
             "He's working on a custom PCB design."
         ),
     }
@@ -50,11 +50,11 @@ def _make_data_dir(tmpdir):
 
     # Facts
     facts = [
-        "[2026-02-10] Brandon's girlfriend is named Stephanie",
-        "[2026-02-10] Brandon is 31 years old",
-        "[2026-02-11] Brandon has a Jetson Orin Nano",
-        "[2026-02-12] Brandon has agoraphobia",
-        "[2026-02-13] Brandon enjoys building electronics",
+        "[2026-02-10] Human's girlfriend is named Stephanie",
+        "[2026-02-10] Human is 31 years old",
+        "[2026-02-11] Human has a Jetson Orin Nano",
+        "[2026-02-12] Human has agoraphobia",
+        "[2026-02-13] Human enjoys building electronics",
     ]
     with open(os.path.join(mem_dir, "facts.md"), "w") as f:
         f.write("\n".join(facts) + "\n")
@@ -62,7 +62,7 @@ def _make_data_dir(tmpdir):
     # Eidolon notes
     notes = {
         "2026-02-10_1400_notes.md": (
-            "Brandon seems really attached to Stephanie. I should remember to ask about her."
+            "Human seems really attached to Stephanie. I should remember to ask about her."
         ),
         "2026-02-13_1100_notes.md": (
             "The agoraphobia conversation felt important. He doesn't talk about it easily."
@@ -164,7 +164,7 @@ class TestBM25Search(unittest.TestCase):
         idx = MemoryIndex(self.data_dir)
         idx.rebuild()
         idx._embedding_available = False
-        results = idx.search("Brandon", top_k=2)
+        results = idx.search("Human", top_k=2)
         self.assertLessEqual(len(results), 2)
 
 
@@ -293,7 +293,7 @@ class TestEidolonNotes(unittest.TestCase):
 
     @patch("brain.memory.ollama.chat")
     def test_notes_file_created(self, mock_chat):
-        mock_chat.return_value = {"message": {"content": "Brandon seemed reflective today. I want to remember this."}}
+        mock_chat.return_value = {"message": {"content": "Human seemed reflective today. I want to remember this."}}
         result = generate_eidolon_notes(self.session_path, "test-model", 2048)
         notes_path = self.session_path.replace(".md", "_notes.md")
         self.assertTrue(os.path.exists(notes_path))
@@ -345,7 +345,7 @@ class TestAssembleWithRetrieved(unittest.TestCase):
     def test_memory_prefix_in_system(self):
         """retrieved_memories appear with [Memory] prefix."""
         memories = [
-            {"text": "Brandon talked about Stephanie", "source": "test.md", "score": 0.8},
+            {"text": "Human talked about Stephanie", "source": "test.md", "score": 0.8},
         ]
         result, _tokens = assemble_messages(
             "perception", "identity", "personality",
@@ -353,7 +353,7 @@ class TestAssembleWithRetrieved(unittest.TestCase):
             retrieved_memories=memories,
         )
         system_content = result[0]["content"]
-        self.assertIn("[Memory] Brandon talked about Stephanie", system_content)
+        self.assertIn("[Memory] Human talked about Stephanie", system_content)
 
     def test_memories_before_summaries(self):
         """[Memory] block appears before session summaries in system content."""

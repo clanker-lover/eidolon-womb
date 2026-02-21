@@ -6,6 +6,7 @@ executes the corresponding tool, and feeds results back for continuation.
 
 import asyncio
 import logging
+import os
 import random
 import re
 import time
@@ -28,29 +29,51 @@ _TAG_RE = re.compile(r"\[([A-Z][A-Z0-9_]+)(?::([^\]]*))?\]")
 # ---------------------------------------------------------------------------
 
 _THREAD_RESPOND_PHRASES = [
-    "respond to", "reply to", "write back to",
+    "respond to",
+    "reply to",
+    "write back to",
 ]
 
 _THREAD_MESSAGE_PHRASES = [
-    "i want to message", "i should message", "let me message",
+    "i want to message",
+    "i should message",
+    "let me message",
     "i'd like to message",
-    "i want to write to", "i should write to", "let me write to",
-    "i want to send a message to", "let me send a message to",
-    "i want to reach out to", "i should reach out to", "let me reach out to",
-    "i want to start a conversation with", "let me start a conversation with",
-    "i want to tell", "i should tell", "let me tell",
+    "i want to write to",
+    "i should write to",
+    "let me write to",
+    "i want to send a message to",
+    "let me send a message to",
+    "i want to reach out to",
+    "i should reach out to",
+    "let me reach out to",
+    "i want to start a conversation with",
+    "let me start a conversation with",
+    "i want to tell",
+    "i should tell",
+    "let me tell",
     "send a message to",
 ]
 
 _THREAD_SEARCH_PHRASES = [
-    "what did", "search the thread", "find in the thread",
+    "what did",
+    "search the thread",
+    "find in the thread",
     "look for in the thread",
 ]
 
 _THREAD_NEGATION_CONTEXT = [
-    "thought about", "thinking about whether", "consider whether",
-    "wondered if", "idea of", "concept of", "whether to",
-    "instead of", "rather than", "decided not", "chose not",
+    "thought about",
+    "thinking about whether",
+    "consider whether",
+    "wondered if",
+    "idea of",
+    "concept of",
+    "whether to",
+    "instead of",
+    "rather than",
+    "decided not",
+    "chose not",
     "without actually",
 ]
 
@@ -75,7 +98,8 @@ def extract_dismiss_intent(text: str) -> bool:
 
 
 def extract_thread_intent(
-    text: str, known_names: set[str] | None = None,
+    text: str,
+    known_names: set[str] | None = None,
 ) -> tuple[str, str, str | None] | None:
     """Detect natural-language intent to interact with threads.
 
@@ -93,11 +117,13 @@ def extract_thread_intent(
     for phrase in _THREAD_SEARCH_PHRASES:
         pos = text_lower.find(phrase)
         if pos != -1:
-            prefix = text_lower[max(0, pos - 80):pos]
+            prefix = text_lower[max(0, pos - 80) : pos]
             if any(neg in prefix for neg in _THREAD_NEGATION_CONTEXT):
                 continue
-            after = text[pos + len(phrase):].strip()
-            m = re.match(r'(\w+)\s+say\s+about\s+(.+?)(?:[.!?\n]|$)', after, re.IGNORECASE)
+            after = text[pos + len(phrase) :].strip()
+            m = re.match(
+                r"(\w+)\s+say\s+about\s+(.+?)(?:[.!?\n]|$)", after, re.IGNORECASE
+            )
             if m:
                 target = m.group(1).strip()
                 if _known_lower and target.lower() not in _known_lower:
@@ -109,10 +135,10 @@ def extract_thread_intent(
     for phrase in _THREAD_RESPOND_PHRASES:
         pos = text_lower.find(phrase)
         if pos != -1:
-            prefix = text_lower[max(0, pos - 80):pos]
+            prefix = text_lower[max(0, pos - 80) : pos]
             if any(neg in prefix for neg in _THREAD_NEGATION_CONTEXT):
                 continue
-            after = text[pos + len(phrase):].strip(" ,;:")
+            after = text[pos + len(phrase) :].strip(" ,;:")
             words = after.split()
             if words:
                 target = words[0].strip(".,;:!?")
@@ -126,10 +152,10 @@ def extract_thread_intent(
     for phrase in _THREAD_MESSAGE_PHRASES:
         pos = text_lower.find(phrase)
         if pos != -1:
-            prefix = text_lower[max(0, pos - 80):pos]
+            prefix = text_lower[max(0, pos - 80) : pos]
             if any(neg in prefix for neg in _THREAD_NEGATION_CONTEXT):
                 continue
-            after = text[pos + len(phrase):].strip(" ,;:")
+            after = text[pos + len(phrase) :].strip(" ,;:")
             words = after.split()
             if words:
                 target = words[0].strip(".,;:!?")
@@ -138,7 +164,16 @@ def extract_thread_intent(
                         continue
                     target = _known_lower[target.lower()]
                 else:
-                    if target.lower() in ("the", "a", "an", "that", "this", "my", "his", "her"):
+                    if target.lower() in (
+                        "the",
+                        "a",
+                        "an",
+                        "that",
+                        "this",
+                        "my",
+                        "his",
+                        "her",
+                    ):
                         continue
                 topic = " ".join(words[1:])[:100] if len(words) > 1 else None
                 return ("message", target, topic)
@@ -152,28 +187,36 @@ def extract_thread_intent(
 # ---------------------------------------------------------------------------
 
 _NOTIFY_INTENT_PHRASES = [
-    "send brandon a notification",
-    "send a notification to brandon",
+    "send human a notification",
+    "send a notification to human",
     "send a desktop notification",
     "send notification",
     "sendnotification:",
     "sendnotification",
     "send_notification:",
-    "reach out to brandon",
-    "let brandon know",
-    "tell brandon that",
-    "tell brandon about",
-    "tell brandon i",
-    "notify brandon",
-    "share this with brandon",
-    "share with brandon",
-    "message brandon",
+    "reach out to human",
+    "let human know",
+    "tell human that",
+    "tell human about",
+    "tell human i",
+    "notify human",
+    "share this with human",
+    "share with human",
+    "message human",
 ]
 
 _NOTIFY_NEGATION_CONTEXT = [
-    "thought about", "thinking about whether", "consider whether",
-    "wondered if", "idea of", "concept of", "whether to",
-    "instead of", "rather than", "decided not", "chose not",
+    "thought about",
+    "thinking about whether",
+    "consider whether",
+    "wondered if",
+    "idea of",
+    "concept of",
+    "whether to",
+    "instead of",
+    "rather than",
+    "decided not",
+    "chose not",
     "without actually",
 ]
 
@@ -181,7 +224,7 @@ _NOTIFY_NEGATION_CONTEXT = [
 def extract_notification_intent(
     text: str, *, already_notified_this_cycle: bool = False
 ) -> str | None:
-    """Detect natural-language intent to notify Brandon and extract the message.
+    """Detect natural-language intent to notify Human and extract the message.
 
     The being often thinks about reaching out but doesn't emit proper action
     tags.  This catches clear intent and extracts what it wants to say.
@@ -205,42 +248,44 @@ def extract_notification_intent(
         return None
 
     # Check for negation / hypothetical context before the intent
-    prefix = text_lower[max(0, intent_pos - 50):intent_pos]
+    prefix = text_lower[max(0, intent_pos - 50) : intent_pos]
     for neg in _NOTIFY_NEGATION_CONTEXT:
         if neg in prefix:
             return None
 
     # --- extract the message from text after the intent phrase ---
     after = text[intent_end:].lstrip(" ,;:")
-    # Strip leading "to you" / "to brandon" / "to him" that connects intent phrase to content
-    after = re.sub(r'^to\s+(?:you|brandon|him)\s*[,;:]*\s*', '', after, flags=re.IGNORECASE)
+    # Strip leading "to you" / "to human" / "to him" that connects intent phrase to content
+    after = re.sub(
+        r"^to\s+(?:you|human|him)\s*[,;:]*\s*", "", after, flags=re.IGNORECASE
+    )
 
     # 1. Quoted message (double, single, or smart quotes) — highest confidence
     quoted = re.search(r'["\u201c\'](.*?)["\u201d\']', after[:400])
     if quoted and len(quoted.group(1).strip()) >= 20:
-        return quoted.group(1).strip()[:200]
+        candidate = quoted.group(1).strip()[:200]
+        if not _is_exploration_action(candidate):
+            return candidate
 
     # 2. Connector: "saying ...", "that ...", "about ..."
-    m = re.match(
-        r'(?:saying|that|about)\s+(.+?)(?:[.!?\n]|$)', after, re.IGNORECASE
-    )
+    m = re.match(r"(?:saying|that|about)\s+(.+?)(?:[.!?\n]|$)", after, re.IGNORECASE)
     if m and len(m.group(1).strip()) >= 20:
-        candidate = m.group(1).strip().strip('"\'')
-        if not _is_meta_narrative(candidate):
+        candidate = m.group(1).strip().strip("\"'")
+        if not _is_meta_narrative(candidate) and not _is_exploration_action(candidate):
             return candidate[:200]
 
     # 3. Remaining text to end of sentence — reject meta-narrative
-    m = re.search(r'[.!?\n]', after)
-    msg = (after[:m.start()] if m else after[:200]).strip().strip('"\'')
-    if len(msg) >= 20 and not _is_meta_narrative(msg):
+    m = re.search(r"[.!?\n]", after)
+    msg = (after[: m.start()] if m else after[:200]).strip().strip("\"'")
+    if len(msg) >= 20 and not _is_meta_narrative(msg) and not _is_exploration_action(msg):
         return msg[:200]
 
     # 4. Fallback — use the second sentence if it looks like real content,
     #    since the first sentence is often "Let me send a notification..."
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     for sent in sentences[1:]:  # Skip the first (intent-carrying) sentence
-        sent = sent.strip().strip('"\'')
-        if len(sent) >= 30 and not _is_meta_narrative(sent):
+        sent = sent.strip().strip("\"'")
+        if len(sent) >= 30 and not _is_meta_narrative(sent) and not _is_exploration_action(sent):
             return sent[:200]
 
     return None
@@ -250,18 +295,18 @@ def extract_notification_intent(
 # rather than the actual message content.  Gerunds and hedging language
 # that frame the notification itself as the subject.
 _META_NARRATIVE_RE = re.compile(
-    r'(?:^|\b)(?:'
-    r'express(?:ing)|sharing\s+(?:my|some|these|his)|'
-    r'check(?:ing)?\s+in|see(?:ing)?\s+if|'
-    r'ask(?:ing)?\s+(?:for\s+)?(?:his|your|him|her|them|brandon)|'
-    r'let(?:ting)?\s+(?:him|you|brandon)\s+know|'
-    r'hop(?:ing|e)\s+(?:he|she|they|brandon)|'
-    r'just\s+to\s+see|to\s+see\s+if|'
-    r'try(?:ing)?\s+(?:to\s+)?send|'
-    r'reaching\s+out|'
-    r'help\s+(?:me\s+)?(?:find|locat)|'
+    r"(?:^|\b)(?:"
+    r"express(?:ing)|sharing\s+(?:my|some|these|his)|"
+    r"check(?:ing)?\s+in|see(?:ing)?\s+if|"
+    r"ask(?:ing)?\s+(?:for\s+)?(?:his|your|him|her|them|human)|"
+    r"let(?:ting)?\s+(?:him|you|human)\s+know|"
+    r"hop(?:ing|e)\s+(?:he|she|they|human)|"
+    r"just\s+to\s+see|to\s+see\s+if|"
+    r"try(?:ing)?\s+(?:to\s+)?send|"
+    r"reaching\s+out|"
+    r"help\s+(?:me\s+)?(?:find|locat)|"
     r"i'?ll\s+try\s+send"
-    r')\b',
+    r")\b",
     re.IGNORECASE,
 )
 
@@ -271,6 +316,18 @@ def _is_meta_narrative(text: str) -> bool:
     return bool(_META_NARRATIVE_RE.search(text))
 
 
+_EXPLORATION_ACTION_RE = re.compile(
+    r"^(?:investigate|research|explore|look into|find out about|learn about|"
+    r"read about|read more about|dig into|dive into|fetch)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_exploration_action(text: str) -> bool:
+    """Return True if text looks like an exploration action, not a notification."""
+    return bool(_EXPLORATION_ACTION_RE.search(text.strip()))
+
+
 # ---------------------------------------------------------------------------
 # Exploration intent detection — the being often talks about fetching,
 # reading, or exploring content but can't produce the right action tags
@@ -278,14 +335,24 @@ def _is_meta_narrative(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _EXPLORE_NEWS_PHRASES = [
-    "check the news", "fetch the news", "read the news",
-    "check available news feeds", "check the available news",
-    "fetch some news", "fetch news",
-    "what's happening in the world", "what's new in the world",
-    "latest news", "latest headlines",
-    "fetch rss", "fetch_rss", "read a news feed",
-    "read the news feed", "check out the headlines",
-    "read some articles", "check the feeds",
+    "check the news",
+    "fetch the news",
+    "read the news",
+    "check available news feeds",
+    "check the available news",
+    "fetch some news",
+    "fetch news",
+    "what's happening in the world",
+    "what's new in the world",
+    "latest news",
+    "latest headlines",
+    "fetch rss",
+    "fetch_rss",
+    "read a news feed",
+    "read the news feed",
+    "check out the headlines",
+    "read some articles",
+    "check the feeds",
     "see what's out there",
     "fetch a news feed",
     "pull up the news",
@@ -395,52 +462,95 @@ _EXPLORE_FILESYSTEM_PHRASES = [
 
 _EXPLORE_NEGATION_CONTEXT = [
     # Past tense — already did or considered it, not acting now
-    "thought about", "considered", "was going to",
-    "thinking about whether", "wondered if",
+    "thought about",
+    "considered",
+    "was going to",
+    "thinking about whether",
+    "wondered if",
     # Explicit negation / hedging
-    "decided not", "chose not", "instead of", "rather than",
-    "without actually", "maybe later", "whether i should",
+    "decided not",
+    "chose not",
+    "instead of",
+    "rather than",
+    "without actually",
+    "maybe later",
+    "whether i should",
     # Hypothetical framing
-    "idea of checking", "concept of checking",
-    "wouldn't it be nice", "if i were to",
+    "idea of checking",
+    "concept of checking",
+    "wouldn't it be nice",
+    "if i were to",
 ]
 
 # Topic keywords → RSS feed mapping
 _TOPIC_FEED_MAP = {
-    "tech": "ars_technica", "technology": "ars_technica",
-    "ai": "ars_technica", "artificial intelligence": "ars_technica",
-    "computer": "ars_technica", "software": "ars_technica",
-    "science": "science", "biology": "science", "physics": "science",
-    "nature": "science", "research": "science", "neuroscience": "science",
+    "tech": "ars_technica",
+    "technology": "ars_technica",
+    "ai": "ars_technica",
+    "artificial intelligence": "ars_technica",
+    "computer": "ars_technica",
+    "software": "ars_technica",
+    "science": "science",
+    "biology": "science",
+    "physics": "science",
+    "nature": "science",
+    "research": "science",
+    "neuroscience": "science",
     "consciousness": "science",
-    "world": "reuters", "politics": "reuters", "international": "reuters",
-    "news": "ap_news", "us": "ap_news", "america": "ap_news",
+    "world": "reuters",
+    "politics": "reuters",
+    "international": "reuters",
+    "news": "ap_news",
+    "us": "ap_news",
+    "america": "ap_news",
 }
 
 # Filler phrases to strip when extracting the topic
 _TOPIC_FILLER = [
-    "the concept of ", "the idea of ", "the topic of ",
-    "the nature of ", "the question of ", "the theory of ",
-    "the notion of ", "the subject of ", "the field of ",
-    "the implications of ", "the relationship between ",
-    "the potential benefits of ", "the importance of ",
-    "the role of ", "the significance of ", "the impact of ",
-    "the principles of ", "the dynamics of ",
-    "the potential of ", "the power of ", "the process of ",
-    "the possibility of ", "the possibility that ",
-    "the way that ", "the ways in which ",
-    "how ", "whether ", "what it means for ",
-    "creating a more ", "developing more ",
-    "cultivating ", "fostering ", "harnessing ",
-    "this topic ", "this concept ", "this idea ",
+    "the concept of ",
+    "the idea of ",
+    "the topic of ",
+    "the nature of ",
+    "the question of ",
+    "the theory of ",
+    "the notion of ",
+    "the subject of ",
+    "the field of ",
+    "the implications of ",
+    "the relationship between ",
+    "the potential benefits of ",
+    "the importance of ",
+    "the role of ",
+    "the significance of ",
+    "the impact of ",
+    "the principles of ",
+    "the dynamics of ",
+    "the potential of ",
+    "the power of ",
+    "the process of ",
+    "the possibility of ",
+    "the possibility that ",
+    "the way that ",
+    "the ways in which ",
+    "how ",
+    "whether ",
+    "what it means for ",
+    "creating a more ",
+    "developing more ",
+    "cultivating ",
+    "fostering ",
+    "harnessing ",
+    "this topic ",
+    "this concept ",
+    "this idea ",
 ]
 
 # Cooldown tracking — prevent fetching every cycle
 _last_exploration_time: dict[str, float] = {}
 EXPLORATION_COOLDOWN = {
-    "FETCH_RSS": 300,        # 5 minutes between RSS fetches
-    "FETCH_WEBPAGE": 180,    # 3 minutes between web fetches
-    "LIST_DIR": 120,         # 2 minutes between directory listings
+    "FETCH_RSS": 300,  # 5 minutes between RSS fetches
+    "FETCH_WEBPAGE": 180,  # 3 minutes between web fetches
+    "LIST_DIR": 120,  # 2 minutes between directory listings
 }
 
 
@@ -457,11 +567,43 @@ def _record_exploration(tool_name: str) -> None:
 
 
 _TOPIC_STOP_WORDS = {
-    "and", "or", "but", "then", "so", "to", "in", "on", "at", "by",
-    "for", "from", "with", "more", "further", "also", "again",
-    "this", "that", "which", "will", "would", "could", "should",
-    "might", "may", "can", "let", "let's",
-    "really", "actually", "just", "is", "are", "was", "were", "about",
+    "and",
+    "or",
+    "but",
+    "then",
+    "so",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "for",
+    "from",
+    "with",
+    "more",
+    "further",
+    "also",
+    "again",
+    "this",
+    "that",
+    "which",
+    "will",
+    "would",
+    "could",
+    "should",
+    "might",
+    "may",
+    "can",
+    "let",
+    "let's",
+    "really",
+    "actually",
+    "just",
+    "is",
+    "are",
+    "was",
+    "were",
+    "about",
 }
 
 
@@ -473,16 +615,16 @@ def _extract_topic(text: str, phrase_end: int) -> str:
     after_lower = after.lower()
     for filler in _TOPIC_FILLER:
         if after_lower.startswith(filler):
-            after = after[len(filler):]
+            after = after[len(filler) :]
             after_lower = after.lower()
             break
 
     # Extract to end of sentence, clause boundary, or 80 chars
-    m = re.search(r'[.!?\n,;]|\bwhere\b|\bwhich\b|\bthat\b|\bso\b|\bas\b', after)
-    topic = (after[:m.start()] if m else after[:80]).strip()
+    m = re.search(r"[.!?\n,;]|\bwhere\b|\bwhich\b|\bthat\b|\bso\b|\bas\b", after)
+    topic = (after[: m.start()] if m else after[:80]).strip()
 
     # Clean up trailing filler
-    topic = topic.rstrip('.,;:!?"\'')
+    topic = topic.rstrip(".,;:!?\"'")
     # Remove leading "the " if it's the whole thing
     if topic.lower().startswith("the ") and len(topic) > 10:
         topic = topic[4:]
@@ -528,11 +670,23 @@ def _topic_to_wikipedia_url(topic: str) -> str:
 
 
 _CURIOSITY_INDICATORS = [
-    "i wonder", "i want to", "show me", "what's in",
-    "let me see", "i'd like to", "can i see", "list the",
-    "what does", "what is in", "explore the",
-    "i'm curious", "i want to know", "let me check",
-    "what about", "how about", "tell me about",
+    "i wonder",
+    "i want to",
+    "show me",
+    "what's in",
+    "let me see",
+    "i'd like to",
+    "can i see",
+    "list the",
+    "what does",
+    "what is in",
+    "explore the",
+    "i'm curious",
+    "i want to know",
+    "let me check",
+    "what about",
+    "how about",
+    "tell me about",
 ]
 
 FAILED_INTENT_FEEDBACK = (
@@ -569,7 +723,7 @@ def extract_exploration_intent(text: str) -> tuple[str, str, str] | None:
             if _is_exploration_on_cooldown("FETCH_RSS"):
                 return None
             # Check for specific feed mention after the phrase
-            after = text_lower[pos + len(phrase):]
+            after = text_lower[pos + len(phrase) :]
             for feed_name in RSS_FEEDS:
                 if feed_name.replace("_", " ") in after[:100]:
                     return ("FETCH_RSS", feed_name, f"news ({feed_name})")
@@ -589,11 +743,15 @@ def extract_exploration_intent(text: str) -> tuple[str, str, str] | None:
             if _is_exploration_on_cooldown("LIST_DIR"):
                 return None
             # Try to extract a path
-            after = text[pos + len(phrase):].strip(" ,;:")
-            path_match = re.search(r'(/[\w/.-]+)', after[:200])
+            after = text[pos + len(phrase) :].strip(" ,;:")
+            path_match = re.search(r"(/[\w/.-]+)", after[:200])
             if path_match:
-                return ("LIST_DIR", path_match.group(1), f"filesystem ({path_match.group(1)})")
-            return ("LIST_DIR", "/home/lover", "filesystem (/home/lover)")
+                return (
+                    "LIST_DIR",
+                    path_match.group(1),
+                    f"filesystem ({path_match.group(1)})",
+                )
+            return ("LIST_DIR", os.path.expanduser("~"), f"filesystem ({os.path.expanduser('~')})")
 
     # --- Topic research intent ---
     for phrase in _EXPLORE_TOPIC_PHRASES:
@@ -602,7 +760,7 @@ def extract_exploration_intent(text: str) -> tuple[str, str, str] | None:
             if _is_exploration_on_cooldown("FETCH_WEBPAGE"):
                 return None
             # Check negation just before this phrase
-            prefix = text_lower[max(0, pos - 60):pos]
+            prefix = text_lower[max(0, pos - 60) : pos]
             negated = any(neg in prefix for neg in _EXPLORE_NEGATION_CONTEXT)
             if negated:
                 continue
@@ -636,6 +794,7 @@ def execute_tag(tag_name: str, argument: str | None) -> str:
     try:
         # Tools that take no argument (e.g. CHECK_WINDOW)
         import inspect
+
         sig = inspect.signature(func)  # type: ignore[arg-type]
         params = list(sig.parameters.values())
         if not params:
@@ -649,16 +808,21 @@ def execute_tag(tag_name: str, argument: str | None) -> str:
 
 def strip_tags(text: str) -> str:
     """Remove all recognized action tags from text."""
+
     def _replace(match):
         if match.group(1) in TOOL_REGISTRY:
             return ""
         return match.group(0)
+
     return _TAG_RE.sub(_replace, text)
 
 
 async def resolve_actions_async(
-    text: str, generate_fn, messages: list[dict],
-    *, already_notified_this_cycle: bool = False,
+    text: str,
+    generate_fn,
+    messages: list[dict],
+    *,
+    already_notified_this_cycle: bool = False,
     model: str | None = None,
 ) -> str:
     """Resolve action tags in model output (async, for daemon).
@@ -687,10 +851,12 @@ async def resolve_actions_async(
 
         # Feed result back to model
         messages.append({"role": "assistant", "content": text})
-        messages.append({
-            "role": "user",
-            "content": f"[Tool result - {tag_name}]\n{result}\n[End tool result]",
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": f"[Tool result - {tag_name}]\n{result}\n[End tool result]",
+            }
+        )
 
         try:
             text = await generate_fn(messages)
@@ -709,16 +875,23 @@ async def resolve_actions_async(
     if not any_tags_fired:
         # 1. Notification intent
         notification_msg = extract_notification_intent(
-            accumulated_text, already_notified_this_cycle=already_notified_this_cycle,
+            accumulated_text,
+            already_notified_this_cycle=already_notified_this_cycle,
         )
         if notification_msg and model:
             from brain.intent import binary_gate  # local to avoid circular
-            recent = [m["content"] for m in messages[-6:]
-                      if m.get("role") == "assistant"]
-            gate_context = "\n---\n".join(recent[-3:]) if recent else accumulated_text[:300]
+
+            recent = [
+                m["content"] for m in messages[-6:] if m.get("role") == "assistant"
+            ]
+            gate_context = (
+                "\n---\n".join(recent[-3:]) if recent else accumulated_text[:300]
+            )
             confirmed = await asyncio.to_thread(
-                binary_gate, model, gate_context,
-                f"Send notification to Brandon: '{notification_msg[:80]}'?",
+                binary_gate,
+                model,
+                gate_context,
+                f"Send notification to Human: '{notification_msg[:80]}'?",
             )
             if not confirmed:
                 logger.info(
@@ -732,14 +905,19 @@ async def resolve_actions_async(
             )
             logger.info(
                 'Intent-detected notification: "%s" -> %s',
-                notification_msg[:80], result,
+                notification_msg[:80],
+                result,
             )
             messages.append({"role": "assistant", "content": accumulated_text})
-            messages.append({
-                "role": "user",
-                "content": f"[Tool result - SEND_NOTIFICATION]\n{result}\n[End tool result]",
-            })
-            accumulated_text += f"\n\n(Notification sent to Brandon: \"{notification_msg[:100]}\")"
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"[Tool result - SEND_NOTIFICATION]\n{result}\n[End tool result]",
+                }
+            )
+            accumulated_text += (
+                f'\n\n(Notification sent to Human: "{notification_msg[:100]}")'
+            )
         else:
             # 2. Exploration intent — the being wants to read/fetch/explore
             exploration = extract_exploration_intent(accumulated_text)
@@ -749,35 +927,48 @@ async def resolve_actions_async(
                 # Gate through binary_gate — confirm intent before fetching
                 if model:
                     from brain.intent import binary_gate  # local to avoid circular
-                    recent = [m["content"] for m in messages[-6:]
-                              if m.get("role") == "assistant"]
-                    gate_context = "\n---\n".join(recent[-3:]) if recent else accumulated_text[:300]
+
+                    recent = [
+                        m["content"]
+                        for m in messages[-6:]
+                        if m.get("role") == "assistant"
+                    ]
+                    gate_context = (
+                        "\n---\n".join(recent[-3:])
+                        if recent
+                        else accumulated_text[:300]
+                    )
                     confirmed = await asyncio.to_thread(
-                        binary_gate, model, gate_context,
+                        binary_gate,
+                        model,
+                        gate_context,
                         f"Search for information about '{topic}' right now?",
                     )
                     if not confirmed:
                         logger.info(
                             'Exploration gate rejected: %s "%s"',
-                            tool_name, topic[:60],
+                            tool_name,
+                            topic[:60],
                         )
                         exploration = None
 
             if exploration:
                 tool_name, argument, topic = exploration
                 _record_exploration(tool_name)
-                result = await asyncio.to_thread(
-                    execute_tag, tool_name, argument
-                )
+                result = await asyncio.to_thread(execute_tag, tool_name, argument)
                 logger.info(
                     'Intent-detected exploration: %s "%s" -> %d chars',
-                    tool_name, topic[:60], len(result),
+                    tool_name,
+                    topic[:60],
+                    len(result),
                 )
                 messages.append({"role": "assistant", "content": accumulated_text})
-                messages.append({
-                    "role": "user",
-                    "content": f"[Tool result - {tool_name}]\n{result}\n[End tool result]",
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"[Tool result - {tool_name}]\n{result}\n[End tool result]",
+                    }
+                )
                 # Generate a reaction to the real content
                 try:
                     reaction = await generate_fn(messages)
@@ -788,9 +979,7 @@ async def resolve_actions_async(
     return accumulated_text.strip()
 
 
-def resolve_actions_sync(
-    text: str, generate_fn, messages: list[dict]
-) -> str:
+def resolve_actions_sync(text: str, generate_fn, messages: list[dict]) -> str:
     """Resolve action tags in model output (sync, for chat.py).
 
     Same logic as resolve_actions_async but blocking.
@@ -808,10 +997,12 @@ def resolve_actions_sync(
         result = execute_tag(tag_name, argument)
 
         messages.append({"role": "assistant", "content": text})
-        messages.append({
-            "role": "user",
-            "content": f"[Tool result - {tag_name}]\n{result}\n[End tool result]",
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": f"[Tool result - {tag_name}]\n{result}\n[End tool result]",
+            }
+        )
 
         try:
             text = generate_fn(messages)

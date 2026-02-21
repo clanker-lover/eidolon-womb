@@ -10,6 +10,7 @@ class DaemonState(enum.Enum):
     AWAKE_AVAILABLE = "awake-available"
     AWAKE_BUSY = "awake-busy"
     ASLEEP = "asleep"
+    STASIS = "stasis"
 
 
 class MessageQueue:

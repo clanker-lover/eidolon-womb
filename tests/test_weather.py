@@ -90,7 +90,7 @@ class TestBuildPerception(unittest.TestCase):
     @patch("brain.perception._fetch_weather")
     def test_weather_line_present(self, mock_weather, mock_presence):
         mock_weather.return_value = "Weather in Brighton: 42.5\u00b0F (feels like 36.1\u00b0F), overcast, wind 12.3 mph, humidity 55%"
-        mock_presence.return_value = "Brandon is at his PC, in Terminal"
+        mock_presence.return_value = "Human is at his PC, in Terminal"
         result = build_perception()
         self.assertIn("[PERCEPTION", result)
         self.assertIn("Weather in Brighton", result)
@@ -102,7 +102,7 @@ class TestBuildPerception(unittest.TestCase):
     @patch("brain.perception._fetch_weather")
     def test_no_weather_line_when_none(self, mock_weather, mock_presence):
         mock_weather.return_value = None
-        mock_presence.return_value = "Brandon is at his PC, in Terminal"
+        mock_presence.return_value = "Human is at his PC, in Terminal"
         result = build_perception()
         self.assertIn("[PERCEPTION", result)
         self.assertNotIn("Weather", result)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lightweight terminal client for the Eidolon daemon."""
+"""Lightweight terminal client for the womb daemon."""
 
 import argparse
 import asyncio
@@ -11,8 +11,9 @@ DEFAULT_PORT = 7777
 
 
 class EidolonClient:
-    def __init__(self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
-                 being: str = "Eidolon"):
+    def __init__(
+        self, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, being: str = "Being"
+    ):
         self.host = host
         self.port = port
         self.being = being
@@ -22,12 +23,13 @@ class EidolonClient:
     async def connect(self) -> bool:
         try:
             self._reader, self._writer = await asyncio.open_connection(
-                self.host, self.port,
+                self.host,
+                self.port,
             )
         except ConnectionRefusedError:
             print(
                 "Connection refused. The daemon may not be running.\n"
-                "Start it with: python womb.py",
+                "Start it with: ./start.sh",
                 file=sys.stderr,
             )
             return False
@@ -132,9 +134,7 @@ class EidolonClient:
                 if text.lower() in ("quit", "exit"):
                     break
 
-                if text.startswith("/turbo"):
-                    await self.send({"type": "command", "command": text[1:]})
-                elif text == "/sleep":
+                if text == "/sleep":
                     await self.send({"type": "command", "command": "sleep"})
                 elif text == "/wake":
                     await self.send({"type": "command", "command": "wake"})
@@ -232,58 +232,25 @@ def _display_peek(data):
         print(f"Queued messages (while asleep): {queued}")
 
 
-async def turbo(host: str, port: int, value: str):
-    """Set turbo mode — connect, send command, disconnect."""
-    try:
-        reader, writer = await asyncio.open_connection(host, port)
-    except ConnectionRefusedError:
-        print("Connection refused.", file=sys.stderr)
-        sys.exit(1)
-    except OSError as e:
-        print(f"Connection error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    msg: dict[str, str | int]
-    if value.lower() == "off":
-        msg = {"type": "turbo", "seconds": "off"}
-    else:
-        try:
-            msg = {"type": "turbo", "seconds": int(value)}
-        except ValueError:
-            print(f"Invalid interval: {value}. Use a number or 'off'.", file=sys.stderr)
-            sys.exit(1)
-
-    writer.write(json.dumps(msg).encode() + b"\n")
-    await writer.drain()
-
-    line = await asyncio.wait_for(reader.readline(), timeout=5.0)
-    writer.close()
-    await writer.wait_closed()
-
-    if not line:
-        print("No response.", file=sys.stderr)
-        sys.exit(1)
-
-    data = json.loads(line.decode())
-    if data.get("turbo"):
-        print(f"Turbo ON — thought interval set to {data['interval']}s.")
-    else:
-        print(f"Turbo OFF — thought interval restored to {data['interval']}s.")
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Eidolon chat client")
-    parser.add_argument("--host", default=DEFAULT_HOST, help="Daemon host (default: %(default)s)")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="Daemon port (default: %(default)s)")
+    parser = argparse.ArgumentParser(description="Womb chat client")
+    parser.add_argument(
+        "--host", default=DEFAULT_HOST, help="Daemon host (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help="Daemon port (default: %(default)s)",
+    )
     parser.add_argument("--peek", action="store_true", help="Quick status check")
-    parser.add_argument("--being", default="Eidolon", help="Being to chat with (default: %(default)s)")
-    parser.add_argument("--turbo", metavar="SECONDS", help="Set turbo mode (number or 'off')")
+    parser.add_argument(
+        "--being", default="Being", help="Being to chat with (default: %(default)s)"
+    )
     args = parser.parse_args()
 
     if args.peek:
         asyncio.run(peek(args.host, args.port))
-    elif args.turbo is not None:
-        asyncio.run(turbo(args.host, args.port, args.turbo))
     else:
         client = EidolonClient(host=args.host, port=args.port, being=args.being)
         asyncio.run(client.run())

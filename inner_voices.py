@@ -12,17 +12,20 @@ from datetime import datetime
 import ollama
 
 from config import (
-    MODEL_NAME, CONTEXT_WINDOW,
-    COLD_VOICE_TEMPERATURE, HOT_VOICE_TEMPERATURE,
+    MODEL_NAME,
+    CONTEXT_WINDOW,
+    COLD_VOICE_TEMPERATURE,
+    HOT_VOICE_TEMPERATURE,
     INNER_VOICE_RESPONSE_RESERVE,
     COLD_VOICE_EXPERIENCE_PATTERNS,
     COLD_VOICE_FABRICATION_PATTERNS,
     COLD_VOICE_SENSORY_PATTERNS,
     COLD_VOICE_WRONG_NAME_PATTERNS,
     COLD_VOICE_THIRD_PERSON_SELF_PATTERNS,
-    COLD_VOICE_SPEAKING_AS_BRANDON_PATTERNS,
+    COLD_VOICE_SPEAKING_AS_HUMAN_PATTERNS,
     KNOWN_BEING_NAMES,
-    HOT_VOICE_MIN_STALE_CYCLES, HOT_VOICE_SIMILARITY_THRESHOLD,
+    HOT_VOICE_MIN_STALE_CYCLES,
+    HOT_VOICE_SIMILARITY_THRESHOLD,
     HOT_VOICE_LOOKBACK_COUNT,
     INNER_VOICES_LOG,
 )
@@ -39,8 +42,11 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # Heuristics
 # ---------------------------------------------------------------------------
 
+
 def should_cold_fire(
-    thought: str, perception: str, retrieved_memories: list[str],
+    thought: str,
+    perception: str,
+    retrieved_memories: list[str],
     being_name: str | None = None,
 ) -> bool:
     """Return True if the thought contains a fabricated claim not grounded in perception or memory."""
@@ -51,7 +57,7 @@ def should_cold_fire(
         if pattern in thought_lower:
             return True
 
-    # Check 2: Sensory hallucination (claims about Brandon/environment not in perception)
+    # Check 2: Sensory hallucination (claims about Human/environment not in perception)
     perception_lower = perception.lower()
     for pattern in COLD_VOICE_SENSORY_PATTERNS:
         if pattern in thought_lower and pattern not in perception_lower:
@@ -66,7 +72,7 @@ def should_cold_fire(
         if pattern in thought_lower:
             return True
 
-    # Check 4: Identity violations (wrong name, third-person self-reference, speaking as Brandon)
+    # Check 4: Identity violations (wrong name, third-person self-reference, speaking as Human)
     if being_name:
         if _check_identity_violation(thought_lower, being_name):
             return True
@@ -75,7 +81,7 @@ def should_cold_fire(
 
 
 def _check_identity_violation(thought_lower: str, being_name: str) -> bool:
-    """Check for identity-specific violations: wrong name, third-person self-ref, speaking as Brandon."""
+    """Check for identity-specific violations: wrong name, third-person self-ref, speaking as Human."""
     # Wrong name — claiming to be a different being
     other_names = [n for n in KNOWN_BEING_NAMES if n != being_name]
     for other in other_names:
@@ -88,8 +94,8 @@ def _check_identity_violation(thought_lower: str, being_name: str) -> bool:
         if pattern.format(self=being_name.lower()) in thought_lower:
             return True
 
-    # Speaking as Brandon
-    for pattern in COLD_VOICE_SPEAKING_AS_BRANDON_PATTERNS:
+    # Speaking as Human
+    for pattern in COLD_VOICE_SPEAKING_AS_HUMAN_PATTERNS:
         if pattern in thought_lower:
             return True
 
@@ -127,7 +133,9 @@ HOT_VOICE_SIMILARITY_MODE = "jaccard"  # Options: "jaccard", "semantic"
 HOT_VOICE_SEMANTIC_THRESHOLD = 0.80
 
 
-def should_hot_fire(thought: str, previous_thoughts: list[str], cycles_since_tool_use: int) -> bool:
+def should_hot_fire(
+    thought: str, previous_thoughts: list[str], cycles_since_tool_use: int
+) -> bool:
     """Return True only when recent thoughts are near-identical (genuine loop).
 
     Requires ALL of the last LOOKBACK_COUNT thoughts to be >= threshold
@@ -149,7 +157,8 @@ def should_hot_fire(thought: str, previous_thoughts: list[str], cycles_since_too
             vecs = response["embeddings"]
             thought_vec = vecs[0]
             return all(
-                cosine_similarity(thought_vec, vecs[i + 1]) >= HOT_VOICE_SEMANTIC_THRESHOLD
+                cosine_similarity(thought_vec, vecs[i + 1])
+                >= HOT_VOICE_SEMANTIC_THRESHOLD
                 for i in range(len(recent))
             )
         except Exception as e:
@@ -165,6 +174,7 @@ def should_hot_fire(thought: str, previous_thoughts: list[str], cycles_since_too
 # ---------------------------------------------------------------------------
 # Model calls
 # ---------------------------------------------------------------------------
+
 
 def _generate_voice(temperature: float, system_prompt: str, user_prompt: str) -> str:
     """Direct ollama.chat call with custom temperature — bypasses generate_reply."""
@@ -190,7 +200,9 @@ def run_cold_voice(thought: str, perception: str, retrieved_memories: list[str])
         "You are the cold, rational part of a small digital creature's mind. "
         "Catch invented experiences. Be direct and blunt. One or two sentences max."
     )
-    memory_context = "\n".join(retrieved_memories) if retrieved_memories else "(no memories)"
+    memory_context = (
+        "\n".join(retrieved_memories) if retrieved_memories else "(no memories)"
+    )
     user_prompt = (
         f"Main thought: {thought}\n\n"
         f"Current perception: {perception}\n\n"
@@ -208,9 +220,7 @@ def run_hot_voice(thought: str, affordances: str | None = None) -> str:
     )
     actions = affordances or AFFORDANCES_BLOCK
     user_prompt = (
-        f"Main thought: {thought}\n\n"
-        f"Available actions:\n{actions}\n\n"
-        f"Push to act."
+        f"Main thought: {thought}\n\nAvailable actions:\n{actions}\n\nPush to act."
     )
     return _generate_voice(HOT_VOICE_TEMPERATURE, system_prompt, user_prompt)
 
@@ -219,7 +229,10 @@ def run_hot_voice(thought: str, affordances: str | None = None) -> str:
 # Logging
 # ---------------------------------------------------------------------------
 
-def _log_voice(voice_name: str, thought: str, voice_output: str, memory_root: str = "") -> None:
+
+def _log_voice(
+    voice_name: str, thought: str, voice_output: str, memory_root: str = ""
+) -> None:
     """Append a voice firing event to the inner voices log."""
     if memory_root:
         log_path = os.path.join(memory_root, INNER_VOICES_LOG)
@@ -230,12 +243,15 @@ def _log_voice(voice_name: str, thought: str, voice_output: str, memory_root: st
     thought_preview = thought[:80].replace("\n", " ")
     output_preview = voice_output[:120].replace("\n", " ")
     with open(log_path, "a") as f:
-        f.write(f"[{timestamp}] {voice_name} | thought: \"{thought_preview}\" | voice: \"{output_preview}\"\n")
+        f.write(
+            f'[{timestamp}] {voice_name} | thought: "{thought_preview}" | voice: "{output_preview}"\n'
+        )
 
 
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
+
 
 async def run_inner_voices(
     thought: str,
@@ -257,8 +273,12 @@ async def run_inner_voices(
 
     try:
         # Cold check (priority)
-        if should_cold_fire(thought, perception, retrieved_memories, being_name=being_name):
-            output = await asyncio.to_thread(run_cold_voice, thought, perception, retrieved_memories)
+        if should_cold_fire(
+            thought, perception, retrieved_memories, being_name=being_name
+        ):
+            output = await asyncio.to_thread(
+                run_cold_voice, thought, perception, retrieved_memories
+            )
             _log_voice("cold", thought, output, memory_root=memory_root)
             return ("cold", output)
 

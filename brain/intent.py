@@ -36,8 +36,9 @@ _YES_TOKENS = {"yes", "y", "1"}
 _NO_TOKENS = {"no", "n", "0"}
 
 
-def binary_gate(model: str, context: str, question: str,
-                framing: str = "standard") -> bool:
+def binary_gate(
+    model: str, context: str, question: str, framing: str = "standard"
+) -> bool:
     """Ask a yes/no question via the LLM. Returns True for yes, False otherwise."""
     template = _PROMPT_TEMPLATES.get(framing, _PROMPT_TEMPLATES["standard"])
     prompt = template.format(context=context, question=question)
@@ -65,15 +66,35 @@ _CURIOSITY_PATTERNS = [
     (re.compile(r"\bwhat is ", re.IGNORECASE), "wikipedia"),
     (re.compile(r"\bwhat are ", re.IGNORECASE), "wikipedia"),
     (re.compile(r"\bi'?m curious about ", re.IGNORECASE), "wikipedia"),
-    (re.compile(r"\bi want to (?:learn|know|understand|read) (?:about )?", re.IGNORECASE), "wikipedia"),
+    (
+        re.compile(
+            r"\bi want to (?:learn|know|understand|read) (?:about )?", re.IGNORECASE
+        ),
+        "wikipedia",
+    ),
     (re.compile(r"\bcheck the news\b", re.IGNORECASE), "rss"),
     (re.compile(r"\bwhat'?s happening", re.IGNORECASE), "rss"),
     (re.compile(r"\bsearch for ", re.IGNORECASE), "web"),
     (re.compile(r"\blook up ", re.IGNORECASE), "web"),
-    (re.compile(r"\bfind (?:information|articles|research) (?:on|about) ", re.IGNORECASE), "web"),
+    (
+        re.compile(
+            r"\bfind (?:information|articles|research) (?:on|about) ", re.IGNORECASE
+        ),
+        "web",
+    ),
 ]
 
-_VAGUE_TOPICS = {"something", "anything", "everything", "nothing", "stuff", "things", "it", "this", "that"}
+_VAGUE_TOPICS = {
+    "something",
+    "anything",
+    "everything",
+    "nothing",
+    "stuff",
+    "things",
+    "it",
+    "this",
+    "that",
+}
 
 _NEGATION_PATTERNS = re.compile(
     r"i was |i had |yesterday|last time"
@@ -93,7 +114,7 @@ def detect_curiosity(thought: str) -> dict | None:
 
         # Negation filter: check 100 chars before match
         pre_start = max(0, match.start() - 100)
-        prefix = thought[pre_start:match.start()]
+        prefix = thought[pre_start : match.start()]
         if _NEGATION_PATTERNS.search(prefix):
             continue
 
@@ -119,16 +140,21 @@ def detect_curiosity(thought: str) -> dict | None:
 # C) Process curiosity — async orchestrator
 # ---------------------------------------------------------------------------
 
-async def process_curiosity(model: str, being_context: str,
-                            curiosity: dict,
-                            framing: str = "standard") -> str | None:
+
+async def process_curiosity(
+    model: str, being_context: str, curiosity: dict, framing: str = "standard"
+) -> str | None:
     """Gate-check curiosity, then execute search. Returns formatted result or None."""
     topic = curiosity["topic"]
     search_type = curiosity["search_type"]
 
     question = f"Look up information about {topic} right now?"
     confirmed = await asyncio.to_thread(
-        binary_gate, model, being_context, question, framing,
+        binary_gate,
+        model,
+        being_context,
+        question,
+        framing,
     )
     if not confirmed:
         logger.debug("binary_gate rejected search for %r", topic)
@@ -138,7 +164,9 @@ async def process_curiosity(model: str, being_context: str,
         if search_type in ("wikipedia", "web"):
             url = _topic_to_wikipedia_url(topic)
             content = await asyncio.to_thread(
-                tool_fetch_webpage, url, INTENT_MAX_RESULT_CHARS,
+                tool_fetch_webpage,
+                url,
+                INTENT_MAX_RESULT_CHARS,
             )
         else:  # rss
             feed_name = _topic_to_feed(topic)

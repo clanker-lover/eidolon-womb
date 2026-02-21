@@ -8,3 +8,6 @@ data/
 dist/
 build/
 .env
+.coverage
+conversations/
+CLAUDE.md

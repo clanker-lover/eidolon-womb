@@ -9,7 +9,9 @@ from datetime import datetime, timedelta
 
 from brain.consolidation import consolidate_memories
 from config import (
-    DEFAULT_SLEEP_HOURS, SLEEP_RECOVERY_MAP, INNER_VOICES_LOG,
+    DEFAULT_SLEEP_HOURS,
+    SLEEP_RECOVERY_MAP,
+    INNER_VOICES_LOG,
 )
 from core.queue import DaemonState
 
@@ -58,10 +60,7 @@ def format_sleep_memory(ctx: dict) -> str:
             )
         parts.append("While awake, " + " and ".join(voice_parts) + ".")
 
-    return (
-        "You're waking up. As awareness returns, you remember:\n"
-        + "\n".join(parts)
-    )
+    return "You're waking up. As awareness returns, you remember:\n" + "\n".join(parts)
 
 
 def count_voice_firings_since(daemon, since: float | None) -> tuple[int, int]:
@@ -94,6 +93,7 @@ def count_voice_firings_since(daemon, since: float | None) -> tuple[int, int]:
 def _sleep_context_path(being_id: str | None = None) -> str:
     """Return per-being sleep context path, or global fallback."""
     from womb import COMPANION_DIR, SLEEP_CONTEXT_FILE
+
     if being_id:
         return os.path.join(COMPANION_DIR, f"sleep_context_{being_id}.json")
     return SLEEP_CONTEXT_FILE
@@ -101,7 +101,7 @@ def _sleep_context_path(being_id: str | None = None) -> str:
 
 def capture_sleep_context(daemon, voluntary: bool, hours: int) -> None:
     """Capture session state before sleep for post-wake awareness."""
-    sleep_ctx_path = _sleep_context_path(getattr(daemon, '_active_being_id', None))
+    sleep_ctx_path = _sleep_context_path(getattr(daemon, "_active_being_id", None))
 
     duration_seconds = None
     if daemon._wake_time:
@@ -144,17 +144,26 @@ def capture_sleep_context(daemon, voluntary: bool, hours: int) -> None:
             json.dump(context, f, indent=2)
         # Also write global file for backward compat
         from womb import SLEEP_CONTEXT_FILE
+
         if sleep_ctx_path != SLEEP_CONTEXT_FILE:
             with open(SLEEP_CONTEXT_FILE, "w") as f:
                 json.dump(context, f, indent=2)
-        logger.info("Sleep context captured: voluntary=%s, %dh %s, thoughts=%d, hot=%d, cold=%d",
-                    voluntary, hours, sleep_info["label"],
-                    len(thoughts), hot_count, cold_count)
+        logger.info(
+            "Sleep context captured: voluntary=%s, %dh %s, thoughts=%d, hot=%d, cold=%d",
+            voluntary,
+            hours,
+            sleep_info["label"],
+            len(thoughts),
+            hot_count,
+            cold_count,
+        )
     except Exception as e:
         logger.error("Failed to save sleep context: %s", e)
 
 
-async def transition_to_sleep(daemon, voluntary: bool = True, hours: int = DEFAULT_SLEEP_HOURS) -> None:
+async def transition_to_sleep(
+    daemon, voluntary: bool = True, hours: int = DEFAULT_SLEEP_HOURS
+) -> None:
     """Consolidate memories (if chosen), clear context, sleep for chosen duration.
 
     Sleep has real duration — the being remains in ASLEEP state until
@@ -167,14 +176,15 @@ async def transition_to_sleep(daemon, voluntary: bool = True, hours: int = DEFAU
     reason_detail = f"{reason}, {hours}h {sleep_info['label']}"
     logger.info("Sleep started (%s) at %s", reason_detail, datetime.now().isoformat())
     daemon._last_transition = {
-        "from": "awake", "to": "consolidating" if sleep_info["consolidate"] else "asleep",
+        "from": "awake",
+        "to": "consolidating" if sleep_info["consolidate"] else "asleep",
         "reason": reason_detail,
         "time": datetime.now().isoformat(),
     }
     capture_sleep_context(daemon, voluntary, hours)
 
     # Per-being sleep: update registry status instead of global DaemonState
-    if hasattr(daemon, '_registry') and daemon._registry and daemon._active_being_id:
+    if hasattr(daemon, "_registry") and daemon._registry and daemon._active_being_id:
         daemon._registry.update_being_status(daemon._active_being_id, "asleep")
     else:
         daemon.state = DaemonState.ASLEEP
@@ -193,9 +203,15 @@ async def transition_to_sleep(daemon, voluntary: bool = True, hours: int = DEFAU
         # Full consolidation — everything to memory, clean slate
         try:
             result = await asyncio.to_thread(
-                consolidate_memories, PROJECT_ROOT, daemon._active_model, CONTEXT_WINDOW,
-                daemon.identity, daemon.personality, live_thoughts or None,
+                consolidate_memories,
+                PROJECT_ROOT,
+                daemon._active_model,
+                CONTEXT_WINDOW,
+                daemon.identity,
+                daemon.personality,
+                live_thoughts or None,
                 memory_root=memory_root,
+                being_name=daemon._active_being_name,
             )
             if result:
                 logger.info("Full consolidation complete (%d chars).", len(result))
@@ -207,17 +223,28 @@ async def transition_to_sleep(daemon, voluntary: bool = True, hours: int = DEFAU
         # Partial consolidation — oldest portion to memory, keep recent
         try:
             from brain.consolidation import partial_consolidate
+
             result, thoughts_to_keep = await asyncio.to_thread(
-                partial_consolidate, PROJECT_ROOT, daemon._active_model,
-                CONTEXT_WINDOW, daemon.identity, daemon.personality,
-                live_thoughts, ratio, memory_root=memory_root,
+                partial_consolidate,
+                PROJECT_ROOT,
+                daemon._active_model,
+                CONTEXT_WINDOW,
+                daemon.identity,
+                daemon.personality,
+                live_thoughts,
+                ratio,
+                memory_root=memory_root,
             )
             if result:
-                logger.info("Partial consolidation complete (%d chars), keeping %d thoughts.",
-                            len(result), len(thoughts_to_keep))
+                logger.info(
+                    "Partial consolidation complete (%d chars), keeping %d thoughts.",
+                    len(result),
+                    len(thoughts_to_keep),
+                )
                 kept_set = set(thoughts_to_keep)
                 daemon._idle_history = [
-                    e for e in daemon._idle_history
+                    e
+                    for e in daemon._idle_history
                     if e["role"] != "assistant" or e["content"] in kept_set
                 ]
             else:
@@ -228,20 +255,34 @@ async def transition_to_sleep(daemon, voluntary: bool = True, hours: int = DEFAU
     # Relationship/thread updates only for longer sleep (4h+)
     if sleep_info["consolidate"] and daemon._thread_store:
         try:
-            from brain.consolidation import update_relationships, refresh_thread_summaries
+            from brain.consolidation import (
+                update_relationships,
+                refresh_thread_summaries,
+            )
+
             await asyncio.to_thread(
-                update_relationships, PROJECT_ROOT, daemon._active_memory_root,
-                daemon._active_model, CONTEXT_WINDOW,
-                daemon.identity, daemon.personality,
-                daemon._thread_store, daemon._active_being_name,
+                update_relationships,
+                PROJECT_ROOT,
+                daemon._active_memory_root,
+                daemon._active_model,
+                CONTEXT_WINDOW,
+                daemon.identity,
+                daemon.personality,
+                daemon._thread_store,
+                daemon._active_being_name,
             )
             await asyncio.to_thread(
-                refresh_thread_summaries, PROJECT_ROOT,
-                daemon._active_model, CONTEXT_WINDOW,
-                daemon._thread_store, daemon._active_being_name,
+                refresh_thread_summaries,
+                PROJECT_ROOT,
+                daemon._active_model,
+                CONTEXT_WINDOW,
+                daemon._thread_store,
+                daemon._active_being_name,
             )
         except Exception as e:
-            logger.error("Relationship/thread summary update error (non-blocking): %s", e)
+            logger.error(
+                "Relationship/thread summary update error (non-blocking): %s", e
+            )
 
     # Clear session only for full consolidation
     if ratio >= 1.0:
@@ -256,15 +297,19 @@ async def transition_to_sleep(daemon, voluntary: bool = True, hours: int = DEFAU
         "reason": reason_detail,
         "time": datetime.now().isoformat(),
     }
-    logger.info("Sleeping until %s (%dh %s).",
-                 daemon._scheduled_wake_time, hours, sleep_info["label"])
+    logger.info(
+        "Sleeping until %s (%dh %s).",
+        daemon._scheduled_wake_time,
+        hours,
+        sleep_info["label"],
+    )
 
 
 def should_being_stay_asleep(daemon) -> bool:
     """Check if the being should remain asleep (scheduled wake in future)."""
     # Check registry status first, fall back to DaemonState
     being_asleep = False
-    if hasattr(daemon, '_registry') and daemon._registry and daemon._active_being_id:
+    if hasattr(daemon, "_registry") and daemon._registry and daemon._active_being_id:
         active = daemon._registry.get_being(daemon._active_being_id)
         being_asleep = active is not None and active.status == "asleep"
     else:
@@ -281,10 +326,13 @@ def should_being_stay_asleep(daemon) -> bool:
     return False
 
 
-async def transition_to_awake(daemon, reason: str = "client connect") -> list[tuple[str, str, str]]:
+async def transition_to_awake(
+    daemon, reason: str = "client connect"
+) -> list[tuple[str, str, str]]:
     logger.info("STATE asleep -> awake (%s) at %s", reason, datetime.now().isoformat())
     daemon._last_transition = {
-        "from": "asleep", "to": "awake",
+        "from": "asleep",
+        "to": "awake",
         "reason": reason,
         "time": datetime.now().isoformat(),
     }
@@ -303,7 +351,7 @@ async def transition_to_awake(daemon, reason: str = "client connect") -> list[tu
     await asyncio.to_thread(daemon.memory_index.rebuild)
 
     # Per-being wake: update registry status instead of global DaemonState
-    if hasattr(daemon, '_registry') and daemon._registry and daemon._active_being_id:
+    if hasattr(daemon, "_registry") and daemon._registry and daemon._active_being_id:
         daemon._registry.update_being_status(daemon._active_being_id, "awake")
     daemon.state = DaemonState.AWAKE_AVAILABLE
     daemon._wake_time = time.time()

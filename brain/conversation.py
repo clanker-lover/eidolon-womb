@@ -16,10 +16,10 @@ def init_session(project_root: str, conversations_dir: str) -> tuple[str, str]:
     return session_id, filepath
 
 
-def save_turn(filepath: str, user_msg: str, reply: str) -> None:
+def save_turn(filepath: str, user_msg: str, reply: str, being_name: str = "Eidolon") -> None:
     with open(filepath, "a") as f:
         f.write(f"**You:** {user_msg}\n\n")
-        f.write(f"**Eidolon:** {reply}\n\n")
+        f.write(f"**{being_name}:** {reply}\n\n")
 
 
 def load_prior_sessions(
@@ -32,7 +32,9 @@ def load_prior_sessions(
         [
             f
             for f in os.listdir(full_dir)
-            if f.endswith(".md") and not f.endswith("_summary.md") and not f.endswith("_notes.md")
+            if f.endswith(".md")
+            and not f.endswith("_summary.md")
+            and not f.endswith("_notes.md")
         ],
         reverse=True,
     )
