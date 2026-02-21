@@ -32,7 +32,9 @@ def load_prior_sessions(
         [
             f
             for f in os.listdir(full_dir)
-            if f.endswith(".md") and not f.endswith("_summary.md") and not f.endswith("_notes.md")
+            if f.endswith(".md")
+            and not f.endswith("_summary.md")
+            and not f.endswith("_notes.md")
         ],
         reverse=True,
     )

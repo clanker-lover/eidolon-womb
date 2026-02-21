@@ -1,4 +1,5 @@
 """Core utilities — config, patterns, queue."""
+
 from core.queue import DaemonState as DaemonState, MessageQueue as MessageQueue
 from core.patterns import (
     has_rest_intent as has_rest_intent,

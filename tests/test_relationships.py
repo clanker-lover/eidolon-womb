@@ -28,25 +28,25 @@ class TestEnsureRelationship(unittest.TestCase):
         self._tmpdir.cleanup()
 
     def test_creates_from_template(self):
-        content = ensure_relationship(self.root, self.memory_path, "Brandon")
-        self.assertIn("# Brandon", content)
+        content = ensure_relationship(self.root, self.memory_path, "Human")
+        self.assertIn("# Human", content)
         self.assertIn("## Facts", content)
         self.assertIn("## Our History", content)
         self.assertIn("## My Sense of Them", content)
 
     def test_creates_with_seed_facts(self):
         content = ensure_relationship(
-            self.root, self.memory_path, "Brandon",
+            self.root, self.memory_path, "Human",
             seed_facts=["Lives in Brighton", "Self-taught engineer"],
         )
         self.assertIn("Lives in Brighton", content)
         self.assertIn("Self-taught engineer", content)
 
     def test_idempotent(self):
-        content1 = ensure_relationship(self.root, self.memory_path, "Brandon")
+        content1 = ensure_relationship(self.root, self.memory_path, "Human")
         # Modify the file
-        save_relationship(self.root, self.memory_path, "Brandon", content1 + "\nExtra note")
-        content2 = ensure_relationship(self.root, self.memory_path, "Brandon")
+        save_relationship(self.root, self.memory_path, "Human", content1 + "\nExtra note")
+        content2 = ensure_relationship(self.root, self.memory_path, "Human")
         self.assertIn("Extra note", content2)
 
 
@@ -87,10 +87,10 @@ class TestListRelationships(unittest.TestCase):
         self.assertEqual(list_relationships(self.root, self.memory_path), [])
 
     def test_list_multiple(self):
-        ensure_relationship(self.root, self.memory_path, "Brandon")
+        ensure_relationship(self.root, self.memory_path, "Human")
         ensure_relationship(self.root, self.memory_path, "Psyche")
         names = list_relationships(self.root, self.memory_path)
-        self.assertEqual(names, ["Brandon", "Psyche"])
+        self.assertEqual(names, ["Human", "Psyche"])
 
 
 if __name__ == "__main__":

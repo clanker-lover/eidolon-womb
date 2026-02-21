@@ -45,13 +45,13 @@ class TestExtractFactsBug(unittest.TestCase):
     def test_dashed_facts_parsed(self, mock_chat):
         """Model returns dashed lines — they should be parsed into clean facts."""
         mock_chat.return_value = {"message": {"content": (
-            "- Name: Brandon\n"
+            "- Name: Human\n"
             "- Age: 31\n"
             "- Condition: Agoraphobic"
         )}}
         result = extract_facts("msg", "model", "prompt", 2048)
         self.assertEqual(len(result), 3)
-        self.assertEqual(result[0], "Name: Brandon")
+        self.assertEqual(result[0], "Name: Human")
         self.assertEqual(result[1], "Age: 31")
         self.assertEqual(result[2], "Condition: Agoraphobic")
 
@@ -84,7 +84,7 @@ class TestExtractFactsBug(unittest.TestCase):
         self.assertTrue(_is_none_response("NONE."))
         self.assertTrue(_is_none_response("none!"))
         self.assertTrue(_is_none_response(" None "))
-        self.assertFalse(_is_none_response("Name: Brandon"))
+        self.assertFalse(_is_none_response("Name: Human"))
         self.assertFalse(_is_none_response("NONE of the above"))
 
     def test_is_junk_line(self):
@@ -93,7 +93,7 @@ class TestExtractFactsBug(unittest.TestCase):
         self.assertTrue(_is_junk_line("Note that the user did not share anything"))
         self.assertTrue(_is_junk_line("There are no personal facts"))
         self.assertTrue(_is_junk_line("There is no personal information"))
-        self.assertFalse(_is_junk_line("Name: Brandon"))
+        self.assertFalse(_is_junk_line("Name: Human"))
         self.assertFalse(_is_junk_line("Age: 31"))
 
 

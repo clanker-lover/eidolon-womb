@@ -23,6 +23,7 @@ from womb import EidolonDaemon  # noqa: E402
 def _make_daemon():
     """Create a daemon with minimal mocks for unit testing."""
     daemon = EidolonDaemon()
+    daemon._active_being_name = "Eidolon"
     daemon.memory_index = MagicMock()
     daemon.memory_index.search.return_value = []
     daemon.memory_index.rebuild = MagicMock()
@@ -40,14 +41,14 @@ class TestColdVoiceHeuristics(unittest.TestCase):
     def test_cold_fires_on_ungrounded_claim(self):
         thought = "I remember when I went hiking in the mountains last summer."
         perception = "It is Monday morning. The time is 9:00 AM."
-        memories = ["Brandon likes coffee.", "Eidolon learned about weather."]
+        memories = ["Human likes coffee.", "Eidolon learned about weather."]
         self.assertTrue(should_cold_fire(thought, perception, memories))
 
     def test_cold_fires_on_experience_pattern_even_if_grounded(self):
         """Experience patterns always fire — the being has no experiential memories."""
-        thought = "I remember when Brandon mentioned hiking and mountains."
-        perception = "Brandon mentioned hiking yesterday."
-        memories = ["Brandon talked about mountains and hiking trails."]
+        thought = "I remember when Human mentioned hiking and mountains."
+        perception = "Human mentioned hiking yesterday."
+        memories = ["Human talked about mountains and hiking trails."]
         self.assertTrue(should_cold_fire(thought, perception, memories))
 
     def test_cold_skips_no_patterns(self):
@@ -95,7 +96,7 @@ class TestColdVoiceHeuristics(unittest.TestCase):
     def test_cold_skips_sensory_when_in_perception(self):
         """If perception actually mentions the sensory content, don't fire."""
         thought = "You seem to be working on something."
-        perception = "Brandon is at his PC. you seem to be working on something."
+        perception = "Human is at his PC. you seem to be working on something."
         memories = []
         self.assertFalse(should_cold_fire(thought, perception, memories))
 
@@ -217,7 +218,7 @@ class TestModelCalls(unittest.TestCase):
         result = run_cold_voice(
             "I remember hiking in the Alps.",
             "Monday morning.",
-            ["Brandon likes coffee."],
+            ["Human likes coffee."],
         )
         self.assertEqual(result, "You never did that. Stay grounded.")
         call_args = mock_chat.call_args

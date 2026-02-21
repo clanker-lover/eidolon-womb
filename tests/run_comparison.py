@@ -2,6 +2,7 @@
 """Compare small language models for Eidolon conversation quality via Ollama."""
 
 import json
+import os
 import time
 import urllib.request
 from datetime import datetime
@@ -115,7 +116,7 @@ def main():
 
     md = build_round2_markdown(results)
 
-    output_path = "/home/lover/eidolon/tests/model_comparison.md"
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_comparison.md")
     with open(output_path, "a") as f:
         f.write(md)
 

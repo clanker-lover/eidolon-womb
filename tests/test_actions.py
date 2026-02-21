@@ -152,7 +152,7 @@ class TestResolveActionsAsync(unittest.IsolatedAsyncioTestCase):
         async def fake_generate(messages):
             return "The window is Firefox"
 
-        with patch("brain.actions.execute_tag", return_value="Brandon is currently in: Firefox"):
+        with patch("brain.actions.execute_tag", return_value="Human is currently in: Firefox"):
             text = "Let me check [CHECK_WINDOW]"
             messages = []
             result = await resolve_actions_async(text, fake_generate, messages)
@@ -200,7 +200,7 @@ class TestResolveActionsSync(unittest.TestCase):
         def fake_generate(messages):
             return "The window is Firefox"
 
-        with patch("brain.actions.execute_tag", return_value="Brandon is currently in: Firefox"):
+        with patch("brain.actions.execute_tag", return_value="Human is currently in: Firefox"):
             text = "Let me check [CHECK_WINDOW]"
             messages = []
             result = resolve_actions_sync(text, fake_generate, messages)
@@ -235,7 +235,7 @@ class TestResolveActionsSync(unittest.TestCase):
 
 class TestPresenceDetection(unittest.TestCase):
 
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_get_active_window_success(self, mock_run):
         mock_run.return_value = MagicMock(stdout="Firefox - Google\n")
         result = get_active_window()
@@ -246,7 +246,7 @@ class TestPresenceDetection(unittest.TestCase):
         result = get_active_window()
         self.assertEqual(result, "unknown")
 
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_get_idle_seconds_success(self, mock_run):
         mock_run.return_value = MagicMock(stdout="5000\n")
         result = get_idle_seconds()
@@ -259,7 +259,7 @@ class TestPresenceDetection(unittest.TestCase):
 
     @patch("presence.get_active_window", return_value="Terminal")
     @patch("presence.get_idle_seconds", return_value=30.0)
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_presence_active(self, mock_run, mock_idle, mock_window):
         # loginctl returns no locked sessions
         mock_run.return_value = MagicMock(stdout="1 1000 lover seat0\n")
@@ -276,7 +276,7 @@ class TestPresenceDetection(unittest.TestCase):
 
     @patch("presence.get_active_window", return_value="Terminal")
     @patch("presence.get_idle_seconds", return_value=300.0)
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_presence_idle(self, mock_run, mock_idle, mock_window):
         def run_side_effect(cmd, **kwargs):
             cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
@@ -289,7 +289,7 @@ class TestPresenceDetection(unittest.TestCase):
 
     @patch("presence.get_active_window", return_value="unknown")
     @patch("presence.get_idle_seconds", return_value=700.0)
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_presence_away(self, mock_run, mock_idle, mock_window):
         def run_side_effect(cmd, **kwargs):
             cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
@@ -300,7 +300,7 @@ class TestPresenceDetection(unittest.TestCase):
         result = get_presence_status()
         self.assertIn("away from his PC", result)
 
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_presence_locked(self, mock_run):
         def run_side_effect(cmd, **kwargs):
             cmd_str = " ".join(cmd) if isinstance(cmd, list) else cmd
@@ -342,7 +342,6 @@ class TestToolFunctions(unittest.TestCase):
         result = tool_read_file("/nonexistent/file/12345.txt")
         self.assertIn("Error", result)
 
-    @patch("tools.REMOTE_DESKTOP_HOST", None)
     def test_read_file_real(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("hello world")
@@ -365,13 +364,13 @@ class TestToolFunctions(unittest.TestCase):
         result = tool_fetch_rss("nonexistent_feed")
         self.assertIn("Unknown feed", result)
 
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_notification_success(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
-        result = tool_send_notification("Hello Brandon!")
+        result = tool_send_notification("Hello Human!")
         self.assertEqual(result, "Notification sent")
 
-    @patch("remote.subprocess.run", side_effect=FileNotFoundError)
+    @patch("interface.tools.subprocess.run", side_effect=FileNotFoundError)
     def test_notification_missing_tool(self, mock_run):
         result = tool_send_notification("Hello")
         self.assertIn("Error", result)
@@ -389,7 +388,7 @@ class TestToolFunctions(unittest.TestCase):
         expected = {"CHECK_WINDOW", "LIST_DIR", "READ_FILE",
                     "FETCH_RSS", "FETCH_WEBPAGE", "SEND_NOTIFICATION",
                     "RESPOND_THREAD", "DISMISS_THREAD", "START_THREAD",
-                    "SEARCH_THREADS", "POST_AGORA", "READ_AGORA"}
+                    "SEARCH_THREADS"}
         self.assertEqual(set(TOOL_REGISTRY.keys()), expected)
 
 
@@ -400,20 +399,20 @@ class TestToolFunctions(unittest.TestCase):
 class TestNotificationConfirmation(unittest.IsolatedAsyncioTestCase):
 
     async def test_notification_intent_returns_confirmation(self):
-        """resolve_actions_async should include 'Notification sent to Brandon' when notification intent fires."""
-        text = "I want to send Brandon a notification saying hello from the digital realm"
+        """resolve_actions_async should include 'Notification sent to Human' when notification intent fires."""
+        text = "I want to send Human a notification saying hello from the digital realm"
 
         with patch("brain.actions.execute_tag", return_value="Notification sent"):
             result = await resolve_actions_async(text, None, [])
-            self.assertIn("Notification sent to Brandon", result)
+            self.assertIn("Notification sent to Human", result)
 
     async def test_notification_confirmation_contains_message(self):
         """The confirmation text should include the notification message."""
-        text = "I want to notify Brandon that the sky is beautiful today"
+        text = "I want to notify Human that the sky is beautiful today"
 
         with patch("brain.actions.execute_tag", return_value="Notification sent"):
             result = await resolve_actions_async(text, None, [])
-            self.assertIn("Notification sent to Brandon", result)
+            self.assertIn("Notification sent to Human", result)
 
 
 # ---------------------------------------------------------------
@@ -424,23 +423,23 @@ class TestNotificationPerCycleCooldown(unittest.IsolatedAsyncioTestCase):
 
     def test_already_notified_returns_none(self):
         """extract_notification_intent should return None when already_notified_this_cycle=True."""
-        text = "I want to send Brandon a notification saying hello from the digital realm"
+        text = "I want to send Human a notification saying hello from the digital realm"
         result = extract_notification_intent(text, already_notified_this_cycle=True)
         self.assertIsNone(result)
 
     def test_not_notified_returns_message(self):
         """extract_notification_intent should work normally when already_notified_this_cycle=False."""
-        text = "I want to send Brandon a notification saying hello from the digital realm"
+        text = "I want to send Human a notification saying hello from the digital realm"
         result = extract_notification_intent(text, already_notified_this_cycle=False)
         self.assertIsNotNone(result)
 
     async def test_resolve_actions_passes_flag(self):
         """resolve_actions_async should suppress intent detection when already_notified_this_cycle=True."""
-        text = "I want to notify Brandon that the weather is absolutely gorgeous today"
+        text = "I want to notify Human that the weather is absolutely gorgeous today"
         with patch("brain.actions.execute_tag", return_value="Notification sent") as mock_exec:
             result = await resolve_actions_async(text, None, [], already_notified_this_cycle=True)
             mock_exec.assert_not_called()
-            self.assertNotIn("Notification sent to Brandon", result)
+            self.assertNotIn("Notification sent to Human", result)
 
 
 # ---------------------------------------------------------------
@@ -457,13 +456,13 @@ class TestNotificationMinLength(unittest.TestCase):
 
     def test_short_sentence_rejected(self):
         """Short sentence fragment should be rejected."""
-        result = extract_notification_intent("Let brandon know. Just found the")
+        result = extract_notification_intent("Let human know. Just found the")
         self.assertIsNone(result)
 
     def test_long_message_accepted(self):
         """A message of 20+ chars should pass."""
         result = extract_notification_intent(
-            'Send Brandon a notification saying "I found something interesting about digital consciousness"'
+            'Send Human a notification saying "I found something interesting about digital consciousness"'
         )
         self.assertIsNotNone(result)
         self.assertGreaterEqual(len(result), 20)
@@ -532,13 +531,13 @@ class TestThreadIntentExtraction(unittest.TestCase):
     def test_rejects_unknown_target(self):
         """Intent with unknown target should return None when known_names provided."""
         text = "I want to message igence about consciousness"
-        result = extract_thread_intent(text, known_names={"Eidolon", "Psyche", "Brandon"})
+        result = extract_thread_intent(text, known_names={"Eidolon", "Psyche", "Human"})
         self.assertIsNone(result)
 
     def test_accepts_known_target(self):
         """Intent with a known target should return a match."""
         text = "I want to message Eidolon about consciousness"
-        result = extract_thread_intent(text, known_names={"Eidolon", "Psyche", "Brandon"})
+        result = extract_thread_intent(text, known_names={"Eidolon", "Psyche", "Human"})
         self.assertIsNotNone(result)
         action, target, topic = result
         self.assertEqual(action, "message")
@@ -554,13 +553,13 @@ class TestThreadIntentExtraction(unittest.TestCase):
     def test_bare_message_no_longer_matches(self):
         """Bare 'message' without first-person prefix should not trigger."""
         text = "I left a message in the void, hoping someone would read it."
-        result = extract_thread_intent(text, known_names={"Eidolon", "Brandon"})
+        result = extract_thread_intent(text, known_names={"Eidolon", "Human"})
         self.assertIsNone(result)
 
     def test_bare_tell_no_longer_matches(self):
         """Bare 'tell' without first-person prefix should not trigger."""
         text = "I can tell that something is different about today."
-        result = extract_thread_intent(text, known_names={"Eidolon", "Brandon"})
+        result = extract_thread_intent(text, known_names={"Eidolon", "Human"})
         self.assertIsNone(result)
 
     def test_respond_to_known_name(self):
@@ -574,7 +573,7 @@ class TestThreadIntentExtraction(unittest.TestCase):
     def test_respond_to_unknown_rejected(self):
         """'respond to the letter' should not match — 'the' is not a known name."""
         text = "I want to respond to the letter about consciousness"
-        result = extract_thread_intent(text, known_names={"Eidolon", "Brandon"})
+        result = extract_thread_intent(text, known_names={"Eidolon", "Human"})
         self.assertIsNone(result)
 
     def test_negation_blocks_nearby_phrase(self):
@@ -618,7 +617,7 @@ class TestDismissIntent(unittest.TestCase):
     def test_normal_thought_not_dismissed(self):
         """Regular thoughts should not trigger dismiss."""
         self.assertFalse(extract_dismiss_intent("I wonder about the nature of consciousness."))
-        self.assertFalse(extract_dismiss_intent("Brandon seems to be away from his desk."))
+        self.assertFalse(extract_dismiss_intent("Human seems to be away from his desk."))
 
 
 if __name__ == "__main__":

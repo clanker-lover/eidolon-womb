@@ -1,4 +1,4 @@
-"""Shared helpers for the Eidolon dashboard."""
+"""Shared helpers for the womb dashboard."""
 
 import json
 import os
@@ -8,8 +8,8 @@ from datetime import datetime
 
 
 def get_project_root() -> str:
-    """Return absolute path to ~/eidolon-womb."""
-    return os.path.expanduser("~/eidolon-womb")
+    """Return absolute path to the project root (parent of dashboard/)."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def ensure_imports():
@@ -21,17 +21,8 @@ def ensure_imports():
 
 ensure_imports()
 
+from core.config import DAEMON_PORT  # noqa: E402
 from core.threads import ThreadStore  # noqa: E402
-
-
-def load_registry():
-    """No registry in single-being womb. Returns None."""
-    return None
-
-
-def load_agora():
-    """No agora in single-being womb. Returns None."""
-    return None
 
 
 def get_thread_store() -> ThreadStore:
@@ -41,12 +32,7 @@ def get_thread_store() -> ThreadStore:
     return ThreadStore(threads_dir)
 
 
-def load_scheduler_state():
-    """No scheduler in single-being womb. Returns None."""
-    return None
-
-
-def peek_daemon(host: str = "10.0.0.91", port: int = 7777) -> dict | None:
+def peek_daemon(host: str = "127.0.0.1", port: int = DAEMON_PORT) -> dict | None:
     """TCP peek to daemon. Returns parsed JSON response or None."""
     try:
         with socket.create_connection((host, port), timeout=3) as sock:
@@ -66,38 +52,27 @@ def peek_daemon(host: str = "10.0.0.91", port: int = 7777) -> dict | None:
     return None
 
 
-def send_turbo(seconds: int | str, host: str = "10.0.0.91", port: int = 7777) -> bool:
-    """Send turbo command to daemon. Use 'off' to restore normal. Returns True on success."""
-    try:
-        with socket.create_connection((host, port), timeout=3) as sock:
-            sock.sendall(json.dumps({"type": "turbo", "seconds": seconds}).encode() + b"\n")
-            data = b""
-            while True:
-                chunk = sock.recv(4096)
-                if not chunk:
-                    break
-                data += chunk
-                if b"\n" in data:
-                    break
-            return True
-    except (ConnectionRefusedError, OSError, TimeoutError):
-        pass
-    return False
-
-
 def send_thread_reply(
-    being: str, thread_id: str, content: str,
-    host: str = "10.0.0.91", port: int = 7777,
+    being: str,
+    thread_id: str,
+    content: str,
+    host: str = "127.0.0.1",
+    port: int = DAEMON_PORT,
 ) -> dict | None:
     """Send a thread reply to a being via the daemon. Returns response dict or None."""
     try:
         with socket.create_connection((host, port), timeout=60) as sock:
-            sock.sendall(json.dumps({
-                "type": "thread_reply",
-                "being": being,
-                "thread_id": thread_id,
-                "content": content,
-            }).encode() + b"\n")
+            sock.sendall(
+                json.dumps(
+                    {
+                        "type": "thread_reply",
+                        "being": being,
+                        "thread_id": thread_id,
+                        "content": content,
+                    }
+                ).encode()
+                + b"\n"
+            )
             sock.settimeout(60)
             data = b""
             while True:
@@ -117,6 +92,7 @@ def send_thread_reply(
 def get_total_cycles() -> int:
     """Read total thought cycles across all beings from stats.json. Never resets."""
     from core.stats import get_all_stats
+
     stats = get_all_stats(get_project_root())
     return sum(b.get("thoughts", 0) for b in stats.values())
 

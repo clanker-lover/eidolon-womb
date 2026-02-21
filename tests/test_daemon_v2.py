@@ -19,6 +19,7 @@ from brain.retrieval import MemoryIndex  # noqa: E402
 def _make_daemon():
     """Create a daemon with minimal mocks for unit testing."""
     daemon = EidolonDaemon()
+    daemon._active_being_name = "Eidolon"
     daemon.memory_index = MagicMock()
     daemon.memory_index.search.return_value = []
     daemon.memory_index.rebuild = MagicMock()
@@ -333,7 +334,7 @@ class TestIdleReflectionIndexing(unittest.TestCase):
             # Create an idle notes file
             notes_path = os.path.join(conv_dir, "idle_2026-02-16_120000_notes.md")
             with open(notes_path, "w") as f:
-                f.write("I noticed Brandon seems happier lately.")
+                f.write("I noticed Human seems happier lately.")
 
             # Build index
             with patch("brain.retrieval.ollama"):
@@ -366,18 +367,18 @@ class TestConsolidation(unittest.TestCase):
         with open(os.path.join(self.conv_dir, "2026-02-15_2255_summary.md"), "w") as f:
             f.write("We talked about the weather.")
         with open(os.path.join(self.conv_dir, "2026-02-15_2255_notes.md"), "w") as f:
-            f.write("Brandon seemed relaxed today.")
+            f.write("Human seemed relaxed today.")
         with open(os.path.join(self.conv_dir, "2026-02-16_0649_summary.md"), "w") as f:
             f.write("Discussed project plans.")
         with open(os.path.join(self.mem_dir, "facts.md"), "w") as f:
-            f.write("- Brandon is 31\n- Brandon lives in Brighton\n")
+            f.write("- Human is 31\n- Human lives in Brighton\n")
 
     def test_find_unconsolidated(self):
         self._create_files()
         result = find_unconsolidated(self.tmpdir)
         self.assertEqual(len(result["summaries"]), 2)
         self.assertEqual(len(result["notes"]), 1)
-        self.assertIn("Brandon is 31", result["facts_text"])
+        self.assertIn("Human is 31", result["facts_text"])
 
     def test_excludes_archived(self):
         self._create_files()
@@ -396,7 +397,7 @@ class TestConsolidation(unittest.TestCase):
     def test_consolidate_produces_file(self, mock_chat):
         self._create_files()
         mock_chat.return_value = {
-            "message": {"content": "Brandon has been doing well. We discussed weather and projects."}
+            "message": {"content": "Human has been doing well. We discussed weather and projects."}
         }
 
         result = consolidate_memories(
@@ -404,7 +405,7 @@ class TestConsolidation(unittest.TestCase):
             identity="I am a being.", personality="",
         )
         self.assertIsNotNone(result)
-        self.assertIn("Brandon", result)
+        self.assertIn("Human", result)
 
         # Verify file exists in consolidated/
         consolidated_files = glob.glob(os.path.join(self.consolidated_dir, "*.md"))
@@ -512,7 +513,7 @@ class TestConsolidation(unittest.TestCase):
             self.tmpdir, "data", "memories", "consolidated", "2026-02-16_120000.md"
         )
         with open(consolidated_path, "w") as f:
-            f.write("Brandon loves hiking and coding.")
+            f.write("Human loves hiking and coding.")
 
         data_dir = os.path.join(self.tmpdir, "data")
         conv_dir = os.path.join(data_dir, "conversations")
@@ -721,7 +722,7 @@ class TestRestIntent(unittest.TestCase):
 
     def test_unrelated_thought(self):
         from womb import _has_rest_intent
-        self.assertFalse(_has_rest_intent("I wonder what Brandon is working on today"))
+        self.assertFalse(_has_rest_intent("I wonder what Human is working on today"))
 
     def test_empty_string(self):
         from womb import _has_rest_intent

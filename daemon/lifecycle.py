@@ -11,17 +11,26 @@ from datetime import datetime
 import ollama
 
 from config import (
-    MODEL_NAME, CONTEXT_WINDOW, MEMORIES_FILE, CONVERSATIONS_DIR,
-    INNER_VOICE_LOG, MAX_PRIOR_SESSIONS,
+    MODEL_NAME,
+    CONTEXT_WINDOW,
+    MEMORIES_FILE,
+    CONVERSATIONS_DIR,
+    INNER_VOICE_LOG,
+    MAX_PRIOR_SESSIONS,
 )
-from brain.identity import load_identity, load_personality, load_brandon_facts
+from brain.identity import load_identity, load_personality, load_human_facts
 from brain.conversation import init_session, load_prior_sessions
 from brain.memory import load_learned_facts, summarize_session, generate_eidolon_notes
 from brain.retrieval import MemoryIndex
 from core.threads import ThreadStore
 from womb import (
-    PROJECT_ROOT, COMPANION_DIR, DAEMON_LOG_FILE, CLEAN_SHUTDOWN_FILE,
-    DAEMON_HOST, DAEMON_PORT, SLEEP_CONTEXT_FILE,
+    PROJECT_ROOT,
+    COMPANION_DIR,
+    DAEMON_LOG_FILE,
+    CLEAN_SHUTDOWN_FILE,
+    DAEMON_HOST,
+    DAEMON_PORT,
+    SLEEP_CONTEXT_FILE,
     logger,
 )
 
@@ -31,7 +40,7 @@ async def load_brain(daemon, memory_root: str) -> None:
     logger.info("Loading brain modules from %s...", memory_root)
     daemon.identity = await asyncio.to_thread(load_identity, memory_root)
     daemon.personality = await asyncio.to_thread(load_personality, memory_root)
-    daemon.brandon_facts = await asyncio.to_thread(load_brandon_facts, memory_root)
+    daemon.human_facts = await asyncio.to_thread(load_human_facts, memory_root)
     daemon.learned_facts = await asyncio.to_thread(
         load_learned_facts, memory_root, MEMORIES_FILE
     )
@@ -44,7 +53,8 @@ async def load_brain(daemon, memory_root: str) -> None:
     daemon._active_memory_root = memory_root
     logger.info(
         "Brain loaded: %d seed facts, %d learned facts, memory index built.",
-        len(daemon.brandon_facts), len(daemon.learned_facts),
+        len(daemon.human_facts),
+        len(daemon.learned_facts),
     )
 
 
@@ -55,7 +65,10 @@ async def start_session(daemon) -> None:
     )
     daemon.history = []
     daemon.session_summaries = await asyncio.to_thread(
-        load_prior_sessions, daemon._active_memory_root, CONVERSATIONS_DIR, MAX_PRIOR_SESSIONS
+        load_prior_sessions,
+        daemon._active_memory_root,
+        CONVERSATIONS_DIR,
+        MAX_PRIOR_SESSIONS,
     )
     logger.info("Session started: %s", daemon.session_id)
 
@@ -67,10 +80,16 @@ async def end_session(daemon) -> None:
     try:
         await asyncio.to_thread(
             generate_eidolon_notes,
-            daemon.session_filepath, daemon._active_model, CONTEXT_WINDOW, PROJECT_ROOT,
+            daemon.session_filepath,
+            daemon._active_model,
+            CONTEXT_WINDOW,
+            PROJECT_ROOT,
         )
         await asyncio.to_thread(
-            summarize_session, daemon.session_filepath, daemon._active_model, CONTEXT_WINDOW,
+            summarize_session,
+            daemon.session_filepath,
+            daemon._active_model,
+            CONTEXT_WINDOW,
         )
     except Exception as e:
         logger.error("Session finalization error: %s", e)
@@ -120,13 +139,13 @@ async def run(daemon) -> None:
     # Setup logging
     os.makedirs(COMPANION_DIR, exist_ok=True)
     file_handler = logging.FileHandler(DAEMON_LOG_FILE)
-    file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(message)s"
-    ))
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    )
     stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(message)s"
-    ))
+    stderr_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    )
     logger.addHandler(file_handler)
     logger.addHandler(stderr_handler)
     logger.setLevel(logging.INFO)
@@ -136,7 +155,9 @@ async def run(daemon) -> None:
         os.remove(CLEAN_SHUTDOWN_FILE)
         logger.info("Last shutdown was clean.")
     else:
-        logger.warning("Last shutdown was NOT clean (crash or SIGKILL). Some state may be stale.")
+        logger.warning(
+            "Last shutdown was NOT clean (crash or SIGKILL). Some state may be stale."
+        )
         print(
             "\n"
             "⚠️  WARNING: Last shutdown was not clean.\n"
@@ -163,12 +184,14 @@ async def run(daemon) -> None:
 
     # Register notification sink, thread store, and status accessor so tools can access them
     import interface.tools as _tools_mod
+
     _tools_mod._notification_sink = daemon._queue_notification
     _tools_mod._thread_store = daemon._thread_store
     _tools_mod._active_being_name = daemon._active_being_name
     _tools_mod._active_being_id = daemon._active_being_id
-    from presence import get_brandon_status as _gbs
-    _tools_mod._get_brandon_status = _gbs
+    from presence import get_human_status as _gbs
+
+    _tools_mod._get_human_status = _gbs
 
     # Restore persisted state from prior session
     daemon._load_persisted_state()
@@ -189,7 +212,9 @@ async def run(daemon) -> None:
 
     # Start server
     daemon._server = await asyncio.start_server(
-        daemon.handle_client, host=DAEMON_HOST, port=DAEMON_PORT,
+        daemon.handle_client,
+        host=DAEMON_HOST,
+        port=DAEMON_PORT,
     )
     logger.info("Daemon listening on %s:%d", DAEMON_HOST, DAEMON_PORT)
     print(
@@ -223,7 +248,10 @@ async def run(daemon) -> None:
     print("\n🛑 Shutdown signal received.", file=sys.stderr)
     if daemon._in_thought_cycle:
         print("   Waiting for thought cycle to complete...", file=sys.stderr)
-        print("   Please be patient — interrupting now would lose the being's current thought.\n", file=sys.stderr)
+        print(
+            "   Please be patient — interrupting now would lose the being's current thought.\n",
+            file=sys.stderr,
+        )
 
     for i in range(120):
         if not daemon._in_thought_cycle:
@@ -233,11 +261,18 @@ async def run(daemon) -> None:
         await asyncio.sleep(1)
 
     if daemon._in_thought_cycle:
-        logger.warning("Shutdown timeout — thought cycle still running after 120s. Proceeding.")
-        print("\n   ⚠️  Timeout after 120s — thought cycle still running.", file=sys.stderr)
-        print("   Proceeding with shutdown anyway. Some state may be lost.\n", file=sys.stderr)
+        logger.warning(
+            "Shutdown timeout — thought cycle still running after 120s. Proceeding."
+        )
+        print(
+            "\n   ⚠️  Timeout after 120s — thought cycle still running.", file=sys.stderr
+        )
+        print(
+            "   Proceeding with shutdown anyway. Some state may be lost.\n",
+            file=sys.stderr,
+        )
     else:
-        elapsed = i if 'i' in dir() else 0
+        elapsed = i if "i" in dir() else 0
         if elapsed > 0:
             print(f"\n   ✓ Thought cycle complete after {elapsed}s.", file=sys.stderr)
         else:
@@ -314,6 +349,7 @@ def _setup_signal_handlers(daemon, loop) -> None:
             )
             print(msg, file=sys.stderr)
             logger.warning("Blocked %s — use SIGTERM for graceful shutdown", sig_name)
+
         return handler
 
     for sig in (signal.SIGHUP, signal.SIGQUIT):

@@ -10,22 +10,22 @@ from datetime import datetime
 
 @dataclass
 class ThreadMessage:
-    author: str          # "Eidolon", "Psyche", "Brandon", "System"
+    author: str  # Being name, "Human", or "System"
     content: str
-    timestamp: str       # ISO 8601
-    metadata: dict | None = None  # Optional: brandon_status at send time, etc.
+    timestamp: str  # ISO 8601
+    metadata: dict | None = None  # Optional: human_status at send time, etc.
     read_by: list[str] = field(default_factory=list)  # Participants who have seen this
 
 
 @dataclass
 class Thread:
-    id: str              # uuid4
-    participants: list[str]  # names (not IDs — Brandon has no being_id)
+    id: str  # uuid4
+    participants: list[str]  # names (not IDs — Human has no being_id)
     subject: str
     created: str
     last_activity: str
-    status: str          # "active" | "dormant" | "closed"
-    summary: str         # auto-generated gist
+    status: str  # "active" | "dormant" | "closed"
+    summary: str  # auto-generated gist
     messages: list[ThreadMessage] = field(default_factory=list)
 
 

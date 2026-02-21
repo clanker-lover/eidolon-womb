@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Terminal monitor for the Eidolon daemon."""
+"""Terminal monitor for the womb daemon."""
 
 import argparse
 import asyncio
@@ -81,7 +81,9 @@ def render(data):
         state_color = GREEN
         state_icon = "*"
     display_state = "Asleep" if state == "asleep" else "Awake"
-    lines.append(f"  {state_color}{BOLD}{state_icon} {display_state}{RESET}  {DIM}{fatigue_label}{RESET}")
+    lines.append(
+        f"  {state_color}{BOLD}{state_icon} {display_state}{RESET}  {DIM}{fatigue_label}{RESET}"
+    )
 
     # Fatigue bar
     lines.append(f"  Fatigue:  {fatigue_bar(fatigue_pct)}")
@@ -96,8 +98,12 @@ def render(data):
             remaining = wake_dt - datetime.now()
             remaining_secs = max(0, int(remaining.total_seconds()))
             wake_hm = wake_dt.strftime("%H:%M")
-            type_info = f"{sleep_hours}h {sleep_type}, " if sleep_type and sleep_hours else ""
-            lines.append(f"  Asleep:   until {wake_hm} ({type_info}{format_duration(remaining_secs)} remaining)")
+            type_info = (
+                f"{sleep_hours}h {sleep_type}, " if sleep_type and sleep_hours else ""
+            )
+            lines.append(
+                f"  Asleep:   until {wake_hm} ({type_info}{format_duration(remaining_secs)} remaining)"
+            )
         except (ValueError, TypeError):
             lines.append("  Asleep:   wake time unknown")
     elif state == "asleep" and asleep_since:
@@ -119,7 +125,7 @@ def render(data):
             preview += "..."
         # Collapse newlines for display
         preview = preview.replace("\n", " ")
-        lines.append(f"  Last:     {DIM}\"{preview}\"{RESET}")
+        lines.append(f'  Last:     {DIM}"{preview}"{RESET}')
 
     # Last transition
     if last_transition:
@@ -182,7 +188,9 @@ async def run_watch(host, port, interval):
     while True:
         # Clear screen (simple: move cursor to top-left, clear)
         sys.stdout.write("\033[H\033[2J")
-        sys.stdout.write(f"{DIM}Eidolon Monitor  (every {interval}s, Ctrl-C to quit){RESET}\n")
+        sys.stdout.write(
+            f"{DIM}Womb Monitor  (every {interval}s, Ctrl-C to quit){RESET}\n"
+        )
         sys.stdout.write(f"{DIM}{'─' * 50}{RESET}\n")
 
         try:
@@ -207,15 +215,23 @@ async def run_watch(host, port, interval):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Eidolon daemon monitor")
-    parser.add_argument("--host", default=DEFAULT_HOST,
-                        help="Daemon host (default: %(default)s)")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT,
-                        help="Daemon port (default: %(default)s)")
-    parser.add_argument("--watch", action="store_true",
-                        help="Auto-refresh every 5s")
-    parser.add_argument("--interval", type=int, default=5,
-                        help="Refresh interval in seconds (default: 5)")
+    parser = argparse.ArgumentParser(description="Womb daemon monitor")
+    parser.add_argument(
+        "--host", default=DEFAULT_HOST, help="Daemon host (default: %(default)s)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help="Daemon port (default: %(default)s)",
+    )
+    parser.add_argument("--watch", action="store_true", help="Auto-refresh every 5s")
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="Refresh interval in seconds (default: 5)",
+    )
     args = parser.parse_args()
 
     try:

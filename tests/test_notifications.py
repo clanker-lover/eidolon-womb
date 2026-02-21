@@ -18,6 +18,7 @@ import tools  # noqa: E402
 def _make_daemon():
     """Create a daemon with minimal mocks for unit testing."""
     daemon = EidolonDaemon()
+    daemon._active_being_name = "Eidolon"
     daemon.memory_index = MagicMock()
     daemon.memory_index.search.return_value = []
     daemon.memory_index.rebuild = MagicMock()
@@ -27,6 +28,7 @@ def _make_daemon():
     daemon._thread_store = MagicMock()
     daemon._thread_store.find_or_create_thread.return_value = MagicMock(id="mock-thread-id")
     daemon._thread_store.append_message.return_value = None
+    daemon._thread_store.count_active.return_value = 0
     return daemon
 
 
@@ -97,9 +99,9 @@ class TestNotificationFiring(unittest.IsolatedAsyncioTestCase):
         self.daemon.state = DaemonState.AWAKE_AVAILABLE
 
     @patch("womb.fire_notify_send", return_value=True)
-    @patch("womb.is_brandon_away", return_value=False)
+    @patch("womb.is_human_away", return_value=False)
     async def test_fires_when_present(self, mock_away, mock_fire):
-        self.daemon.pending_notifications = [{"being": "Eidolon", "message": "hello Brandon"}]
+        self.daemon.pending_notifications = [{"being": "Eidolon", "message": "hello Human"}]
         self.daemon.notification_seen = False
         self.daemon._last_notification_check = 0.0
         self.daemon.notification_sent_at = None
@@ -107,7 +109,7 @@ class TestNotificationFiring(unittest.IsolatedAsyncioTestCase):
         now = time.monotonic()
 
         # Simulate the idle loop notification check
-        away = await asyncio.to_thread(is_brandon_away_stub_false)
+        away = await asyncio.to_thread(is_human_away_stub_false)
         self.assertFalse(away)
 
         # Directly test the logic
@@ -119,23 +121,23 @@ class TestNotificationFiring(unittest.IsolatedAsyncioTestCase):
                 await asyncio.to_thread(mock_fire, entry["message"], entry["being"])
                 self.daemon.notification_sent_at = now
 
-        mock_fire.assert_called_with("hello Brandon", "Eidolon")
+        mock_fire.assert_called_with("hello Human", "Eidolon")
         self.assertIsNotNone(self.daemon.notification_sent_at)
 
     @patch("womb.fire_notify_send", return_value=True)
-    @patch("womb.is_brandon_away", return_value=True)
+    @patch("womb.is_human_away", return_value=True)
     async def test_skips_when_away(self, mock_away, mock_fire):
-        self.daemon.pending_notifications = [{"being": "Eidolon", "message": "hello Brandon"}]
+        self.daemon.pending_notifications = [{"being": "Eidolon", "message": "hello Human"}]
         self.daemon.notification_seen = False
 
         away = mock_away()
         if not away:
-            mock_fire("hello Brandon", "Eidolon")
+            mock_fire("hello Human", "Eidolon")
 
         mock_fire.assert_not_called()
 
     @patch("womb.fire_notify_send", return_value=True)
-    @patch("womb.is_brandon_away", return_value=False)
+    @patch("womb.is_human_away", return_value=False)
     async def test_cooldown_respected(self, mock_away, mock_fire):
         self.daemon.pending_notifications = [{"being": "Eidolon", "message": "hello"}]
         self.daemon.notification_seen = False
@@ -156,7 +158,7 @@ class TestNotificationFiring(unittest.IsolatedAsyncioTestCase):
         mock_fire.assert_not_called()
 
     @patch("womb.fire_notify_send", return_value=True)
-    @patch("womb.is_brandon_away", return_value=False)
+    @patch("womb.is_human_away", return_value=False)
     async def test_fires_on_away_to_present_transition(self, mock_away, mock_fire):
         self.daemon.pending_notifications = [{"being": "Psyche", "message": "welcome back"}]
         self.daemon.notification_seen = False
@@ -296,10 +298,10 @@ class TestPeekProtocol(unittest.IsolatedAsyncioTestCase):
 
 
 class TestIsNotificationAway(unittest.TestCase):
-    """Test is_brandon_away() with mocked loginctl and xprintidle."""
+    """Test is_human_away() with mocked loginctl and xprintidle."""
 
     @patch("presence.get_idle_seconds", return_value=0.0)
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_locked_returns_true(self, mock_run, mock_idle):
         # First call: list-sessions
         sessions_result = MagicMock()
@@ -310,11 +312,11 @@ class TestIsNotificationAway(unittest.TestCase):
 
         mock_run.side_effect = [sessions_result, lock_result]
 
-        from presence import is_brandon_away
-        self.assertTrue(is_brandon_away())
+        from presence import is_human_away
+        self.assertTrue(is_human_away())
 
     @patch("presence.get_idle_seconds", return_value=700.0)
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_idle_returns_true(self, mock_run, mock_idle):
         # list-sessions
         sessions_result = MagicMock()
@@ -325,11 +327,11 @@ class TestIsNotificationAway(unittest.TestCase):
 
         mock_run.side_effect = [sessions_result, lock_result]
 
-        from presence import is_brandon_away
-        self.assertTrue(is_brandon_away())
+        from presence import is_human_away
+        self.assertTrue(is_human_away())
 
     @patch("presence.get_idle_seconds", return_value=60.0)
-    @patch("remote.subprocess.run")
+    @patch("interface.presence.subprocess.run")
     def test_active_returns_false(self, mock_run, mock_idle):
         sessions_result = MagicMock()
         sessions_result.stdout = "1 1000 lover seat0 \n"
@@ -338,32 +340,33 @@ class TestIsNotificationAway(unittest.TestCase):
 
         mock_run.side_effect = [sessions_result, lock_result]
 
-        from presence import is_brandon_away
-        self.assertFalse(is_brandon_away())
+        from presence import is_human_away
+        self.assertFalse(is_human_away())
 
     @patch("presence.get_idle_seconds", return_value=700.0)
     @patch("presence.subprocess.run", side_effect=FileNotFoundError)
     def test_loginctl_missing_falls_back_to_idle(self, mock_run, mock_idle):
-        from presence import is_brandon_away
-        self.assertTrue(is_brandon_away())
+        from presence import is_human_away
+        self.assertTrue(is_human_away())
 
 
 class TestFireNotifySend(unittest.TestCase):
     """Test fire_notify_send() helper."""
 
-    @patch("remote.subprocess.run")
+    @patch("interface.tools.subprocess.run")
     def test_success(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
         result = tools.fire_notify_send("test message")
         self.assertTrue(result)
 
-    @patch("remote.subprocess.run", side_effect=OSError)
+    @patch("interface.tools.subprocess.run", side_effect=FileNotFoundError)
     def test_notify_send_missing(self, mock_run):
         result = tools.fire_notify_send("test")
         self.assertFalse(result)
 
-    @patch("remote.subprocess.run")
-    def test_plays_sound(self, mock_run):
+    @patch("interface.tools.subprocess.run")
+    @patch("interface.tools.os.path.exists", return_value=True)
+    def test_plays_sound(self, mock_exists, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
         tools.fire_notify_send("test")
         # Should be called twice: once for notify-send, once for paplay
@@ -396,7 +399,7 @@ class TestNotificationPopsAfterFire(unittest.IsolatedAsyncioTestCase):
     """BUG 1: Verify notification is removed from queue after firing."""
 
     @patch("womb.fire_notify_send", return_value=True)
-    @patch("womb.is_brandon_away", return_value=False)
+    @patch("womb.is_human_away", return_value=False)
     async def test_notification_pops_after_fire(self, mock_away, mock_fire):
         daemon = _make_daemon()
         daemon.pending_notifications = [
@@ -416,7 +419,7 @@ class TestNotificationPopsAfterFire(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(daemon.pending_notifications[0]["message"], "second")
 
     @patch("womb.fire_notify_send", return_value=True)
-    @patch("womb.is_brandon_away", return_value=False)
+    @patch("womb.is_human_away", return_value=False)
     async def test_successive_fires_drain_queue(self, mock_away, mock_fire):
         daemon = _make_daemon()
         daemon.pending_notifications = [
@@ -443,8 +446,8 @@ class TestNotificationDedup(unittest.TestCase):
 
     def test_exact_duplicate_skipped(self):
         daemon = _make_daemon()
-        daemon._queue_notification("hello Brandon")
-        result = daemon._queue_notification("hello Brandon")
+        daemon._queue_notification("hello Human")
+        result = daemon._queue_notification("hello Human")
         self.assertEqual(len(daemon.pending_notifications), 1)
         self.assertIn("already queued", result.lower())
 
@@ -456,8 +459,8 @@ class TestNotificationDedup(unittest.TestCase):
 
     def test_dedup_is_exact_match(self):
         daemon = _make_daemon()
-        daemon._queue_notification("hello Brandon")
-        daemon._queue_notification("Hello Brandon")  # different case
+        daemon._queue_notification("hello Human")
+        daemon._queue_notification("Hello Human")  # different case
         self.assertEqual(len(daemon.pending_notifications), 2)
 
     def test_same_message_different_beings_both_queued(self):
@@ -473,7 +476,7 @@ class TestNotificationDedup(unittest.TestCase):
 
 
 # Stub for test_fires_when_present
-def is_brandon_away_stub_false():
+def is_human_away_stub_false():
     return False
 
 

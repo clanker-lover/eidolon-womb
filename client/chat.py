@@ -6,16 +6,29 @@ sys.path.insert(0, PROJECT_ROOT)
 
 import ollama  # noqa: E402 — must come after sys.path insert
 from core.config import (  # noqa: E402
-    MODEL_NAME, TEMPERATURE, CONTEXT_WINDOW, RESPONSE_RESERVE,
-    MEMORIES_FILE, CONVERSATIONS_DIR, INNER_VOICE_LOG,
-    INNER_VOICE_MAX_RETRIES, MEMORY_EXTRACTION_PROMPT, MAX_PRIOR_SESSIONS,
+    MODEL_NAME,
+    TEMPERATURE,
+    CONTEXT_WINDOW,
+    RESPONSE_RESERVE,
+    MEMORIES_FILE,
+    CONVERSATIONS_DIR,
+    INNER_VOICE_LOG,
+    INNER_VOICE_MAX_RETRIES,
+    MEMORY_EXTRACTION_PROMPT,
+    MAX_PRIOR_SESSIONS,
     RETRIEVAL_TOP_K,
 )
 from brain.perception import build_perception  # noqa: E402
-from brain.identity import load_identity, load_personality, load_brandon_facts  # noqa: E402
+from brain.identity import load_identity, load_personality, load_human_facts  # noqa: E402
 from brain.context import assemble_messages  # noqa: E402
 from brain.conversation import init_session, save_turn, load_prior_sessions  # noqa: E402
-from brain.memory import load_learned_facts, extract_facts, save_facts, summarize_session, generate_eidolon_notes  # noqa: E402
+from brain.memory import (
+    load_learned_facts,
+    extract_facts,
+    save_facts,
+    summarize_session,
+    generate_eidolon_notes,
+)  # noqa: E402
 from brain.retrieval import MemoryIndex  # noqa: E402
 from brain.inner_voice import run_layer1_reflexes, run_layer2_heuristics  # noqa: E402
 from brain.actions import resolve_actions_sync  # noqa: E402
@@ -52,7 +65,7 @@ def main():
     memory_root = _get_memory_root()
     identity = load_identity(memory_root)
     personality = load_personality(memory_root)
-    brandon_facts = load_brandon_facts(memory_root)
+    human_facts = load_human_facts(memory_root)
     learned_facts = load_learned_facts(memory_root, MEMORIES_FILE)
     session_summaries = load_prior_sessions(
         memory_root, CONVERSATIONS_DIR, MAX_PRIOR_SESSIONS
@@ -84,8 +97,14 @@ def main():
         perception = build_perception()
         retrieved = memory_index.search(user_input, top_k=RETRIEVAL_TOP_K)
         messages, _tokens_used = assemble_messages(
-            perception, identity, personality, brandon_facts,
-            learned_facts, history, user_input, session_summaries,
+            perception,
+            identity,
+            personality,
+            human_facts,
+            learned_facts,
+            history,
+            user_input,
+            session_summaries,
             retrieved_memories=retrieved,
         )
 
@@ -133,8 +152,10 @@ def main():
         # Extract and save facts
         try:
             new_facts = extract_facts(
-                user_input, MODEL_NAME,
-                MEMORY_EXTRACTION_PROMPT, CONTEXT_WINDOW,
+                user_input,
+                MODEL_NAME,
+                MEMORY_EXTRACTION_PROMPT,
+                CONTEXT_WINDOW,
             )
             learned_facts = save_facts(
                 memory_root, MEMORIES_FILE, new_facts, learned_facts

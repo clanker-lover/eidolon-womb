@@ -7,18 +7,19 @@ import os
 import subprocess  # nosec B404 — subprocess needed for desktop notifications (notify-send, paplay)
 import time
 
-from core.config import REMOTE_DESKTOP_HOST
-from remote import run_on_desktop
 from interface.presence import get_active_window
 
 from typing import Any, Callable
 
-_notification_sink: Callable | None = None      # Set by daemon to intercept SEND_NOTIFICATION
-_thread_store: Any = None                       # Set by daemon to provide ThreadStore access
-_get_brandon_status: Callable | None = None     # Set by daemon to provide get_brandon_status access
-_active_being_name: str | None = None           # Set by daemon to identify the active being
-_active_being_id: str | None = None             # Set by daemon to identify the active being's ID
-_agora: Any = None                              # Set by daemon to provide Agora access
+_notification_sink: Callable | None = (
+    None  # Set by daemon to intercept SEND_NOTIFICATION
+)
+_thread_store: Any = None  # Set by daemon to provide ThreadStore access
+_get_human_status: Callable | None = (
+    None  # Set by daemon to provide get_human_status access
+)
+_active_being_name: str | None = None  # Set by daemon to identify the active being
+_active_being_id: str | None = None  # Set by daemon to identify the active being's ID
 
 # RSS feed URLs — these should be verified periodically
 RSS_FEEDS = {
@@ -35,98 +36,78 @@ _RSS_CACHE_SECONDS = 900  # 15 minutes
 
 
 def tool_check_window() -> str:
-    """Check what window Brandon currently has focused."""
+    """Check what window Human currently has focused."""
     title = get_active_window()
-    return f"Brandon is currently in: {title}"
+    return f"Human is currently in: {title}"
 
 
 def tool_list_dir(path: str | None = None) -> str:
     """List directory contents with file sizes."""
     if not path:
         return "Error: no path provided. Usage: [LIST_DIR:/path/to/directory]"
-    if REMOTE_DESKTOP_HOST:
-        result = run_on_desktop(["ls", "-lah", path])
-        if result.returncode != 0:
-            err = result.stderr.strip()
-            if "No such file" in err:
-                return f"Error: directory not found: {path}"
-            if "Permission denied" in err:
-                return f"Error: permission denied: {path}"
-            return f"Error reading directory: {err}"
-        return f"Contents of {path}:\n{result.stdout.strip()}"
-    else:
+    try:
+        entries = os.listdir(path)
+    except FileNotFoundError:
+        return f"Error: directory not found: {path}"
+    except PermissionError:
+        return f"Error: permission denied: {path}"
+    except OSError as e:
+        return f"Error reading directory: {e}"
+
+    entries.sort()
+    lines = []
+    max_entries = 50
+    for name in entries[:max_entries]:
+        full = os.path.join(path, name)
         try:
-            entries = os.listdir(path)
-        except FileNotFoundError:
-            return f"Error: directory not found: {path}"
-        except PermissionError:
-            return f"Error: permission denied: {path}"
-        except OSError as e:
-            return f"Error reading directory: {e}"
-
-        entries.sort()
-        lines = []
-        max_entries = 50
-        for name in entries[:max_entries]:
-            full = os.path.join(path, name)
-            try:
-                stat = os.stat(full)
-                if os.path.isdir(full):
-                    lines.append(f"  {name}/")
+            stat = os.stat(full)
+            if os.path.isdir(full):
+                lines.append(f"  {name}/")
+            else:
+                size = stat.st_size
+                if size < 1024:
+                    lines.append(f"  {name}  ({size} B)")
+                elif size < 1024 * 1024:
+                    lines.append(f"  {name}  ({size / 1024:.1f} KB)")
                 else:
-                    size = stat.st_size
-                    if size < 1024:
-                        lines.append(f"  {name}  ({size} B)")
-                    elif size < 1024 * 1024:
-                        lines.append(f"  {name}  ({size / 1024:.1f} KB)")
-                    else:
-                        lines.append(f"  {name}  ({size / (1024 * 1024):.1f} MB)")
-            except OSError:
-                lines.append(f"  {name}")
+                    lines.append(f"  {name}  ({size / (1024 * 1024):.1f} MB)")
+        except OSError:
+            lines.append(f"  {name}")
 
-        result = f"Contents of {path}:\n" + "\n".join(lines)
-        remaining = len(entries) - max_entries
-        if remaining > 0:
-            result += f"\n  ... and {remaining} more"
-        return result
+    result_str = f"Contents of {path}:\n" + "\n".join(lines)
+    remaining = len(entries) - max_entries
+    if remaining > 0:
+        result_str += f"\n  ... and {remaining} more"
+    return result_str
 
 
 def tool_read_file(path: str | None = None, max_bytes: int = 8192) -> str:
     """Read a file's contents, truncating at max_bytes."""
     if not path:
         return "Error: no path provided. Usage: [READ_FILE:/path/to/file]"
-    if REMOTE_DESKTOP_HOST:
-        result = run_on_desktop(["head", "-c", str(max_bytes), path])
-        if result.returncode != 0:
-            err = result.stderr.strip()
-            if "No such file" in err:
-                return f"Error: file not found: {path}"
-            if "Permission denied" in err:
-                return f"Error: permission denied: {path}"
-            return f"Error: {err}"
-        return result.stdout
-    else:
-        try:
-            size = os.path.getsize(path)
-        except FileNotFoundError:
-            return f"Error: file not found: {path}"
-        except PermissionError:
-            return f"Error: permission denied: {path}"
-        except OSError as e:
-            return f"Error: {e}"
+    try:
+        size = os.path.getsize(path)
+    except FileNotFoundError:
+        return f"Error: file not found: {path}"
+    except PermissionError:
+        return f"Error: permission denied: {path}"
+    except OSError as e:
+        return f"Error: {e}"
 
-        try:
-            with open(path, "r") as f:
-                content = f.read(max_bytes)
-            if size > max_bytes:
-                content += f"\n\n[... truncated at {max_bytes} bytes, file is {size} bytes total]"
-            return content
-        except UnicodeDecodeError:
-            return f"This is a binary file, {size} bytes"
-        except PermissionError:
-            return f"Error: permission denied: {path}"
-        except OSError as e:
-            return f"Error reading file: {e}"
+    try:
+        with open(path, "r") as f:
+            content = f.read(max_bytes)
+        if size > max_bytes:
+            content += (
+                f"\n\n[... truncated at {max_bytes} bytes, file is {size} bytes total]"
+            )
+        return content
+    except UnicodeDecodeError:
+        return f"This is a binary file, {size} bytes"
+    except PermissionError:
+        return f"Error: permission denied: {path}"
+    except OSError as e:
+        return f"Error reading file: {e}"
 
 
 def tool_fetch_rss(feed_name: str | None = None) -> str:
@@ -165,6 +146,7 @@ def tool_fetch_rss(feed_name: str | None = None) -> str:
             summary = entry.get("summary", "")
             # Strip HTML tags from summary
             import re
+
             summary = re.sub(r"<[^>]+>", "", summary)
             if len(summary) > 200:
                 summary = summary[:200] + "..."
@@ -195,7 +177,9 @@ def tool_fetch_webpage(url: str | None = None, max_chars: int = 6000) -> str:
             return f"Error: could not download {url}"
         text = trafilatura.extract(downloaded)
         if not text:
-            return f"Could not extract text content from {url} (may not be an HTML page)"
+            return (
+                f"Could not extract text content from {url} (may not be an HTML page)"
+            )
         if len(text) > max_chars:
             text = text[:max_chars] + f"\n\n[... truncated at {max_chars} characters]"
         return text
@@ -203,33 +187,29 @@ def tool_fetch_webpage(url: str | None = None, max_chars: int = 6000) -> str:
         return f"Error fetching webpage: {e}"
 
 
-def fire_notify_send(message: str, being_name: str = "Eidolon") -> bool:
+def fire_notify_send(message: str, being_name: str = "Being") -> bool:
     """Fire notify-send + optional sound. Returns True on success."""
-    if REMOTE_DESKTOP_HOST:
-        try:
-            result = run_on_desktop(["notify-send", being_name, message, "--urgency=normal"])
-            run_on_desktop(["paplay", os.path.expanduser("~/.companion/notification.ogg")])
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, OSError):
-            return False
-    else:
-        try:
-            subprocess.run(["notify-send", being_name, message, "--urgency=critical"], timeout=5)  # nosec — hardcoded system binary with safe args
-            sound_path = os.path.expanduser("~/.companion/notification.ogg")
-            if os.path.exists(sound_path):
-                try:
-                    subprocess.run(["paplay", sound_path], timeout=5, capture_output=True)  # nosec — hardcoded system binary with safe args
-                except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-                    pass
-            return True
-        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-            return False
+    try:
+        subprocess.run(
+            ["notify-send", being_name, message, "--urgency=critical"], timeout=5
+        )  # nosec B603 — hardcoded system binary
+        sound_path = os.path.expanduser("~/.companion/notification.ogg")
+        if os.path.exists(sound_path):
+            try:
+                subprocess.run(["paplay", sound_path], timeout=5, capture_output=True)  # nosec B603 — hardcoded system binary
+            except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+                pass
+        return True
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
 
 
 def tool_send_notification(message: str | None = None) -> str:
-    """Send a desktop notification to Brandon."""
+    """Send a desktop notification to Human."""
     if not message:
-        return "Error: no message provided. Usage: [SEND_NOTIFICATION:your message here]"
+        return (
+            "Error: no message provided. Usage: [SEND_NOTIFICATION:your message here]"
+        )
     if _notification_sink is not None:
         return _notification_sink(message)
     if fire_notify_send(message):
@@ -250,6 +230,7 @@ def tool_respond_thread(arg: str | None = None) -> str:
         return "Error: message cannot be empty"
     from core.threads import ThreadMessage
     from datetime import datetime
+
     thread = _thread_store.get_thread(thread_id)
     if thread is None and len(thread_id) < 36:
         for t in _thread_store.list_threads():
@@ -260,13 +241,13 @@ def tool_respond_thread(arg: str | None = None) -> str:
     if thread is None:
         return f"Error: thread '{thread_id}' not found"
 
-    # Capture Brandon's status at send time
+    # Capture Human's status at send time
     metadata = None
     status_dict = None
-    if _get_brandon_status and "Brandon" in thread.participants:
+    if _get_human_status and "Human" in thread.participants:
         try:
-            status_dict = _get_brandon_status()
-            metadata = {"brandon_status": status_dict["detail"]}
+            status_dict = _get_human_status()
+            metadata = {"human_status": status_dict["detail"]}
         except Exception:
             pass  # nosec B110 — status fetch failure is non-critical
 
@@ -280,9 +261,10 @@ def tool_respond_thread(arg: str | None = None) -> str:
     # Mark thread read now that the being has actually engaged
     _thread_store.mark_thread_read(thread_id, _active_being_name or "Unknown")
 
-    # Return projection if messaging Brandon
-    if status_dict and "Brandon" in thread.participants:
+    # Return projection if messaging Human
+    if status_dict and "Human" in thread.participants:
         from interface.presence import format_send_confirmation
+
         return format_send_confirmation(status_dict)
     return f"Reply added to thread '{thread.subject}'."
 
@@ -305,7 +287,7 @@ def tool_dismiss_thread(arg: str | None = None) -> str:
     if thread is None:
         return f"Error: thread '{arg.strip()}' not found"
     _thread_store.mark_thread_read(thread_id, _active_being_name or "Unknown")
-    return f"Thread \"{thread.subject}\" dismissed. You can revisit it anytime."
+    return f'Thread "{thread.subject}" dismissed. You can revisit it anytime.'
 
 
 def tool_start_thread(arg: str | None = None) -> str:
@@ -325,14 +307,14 @@ def tool_start_thread(arg: str | None = None) -> str:
     from core.threads import ThreadMessage
     from datetime import datetime
 
-    # Capture Brandon's status at send time
+    # Capture Human's status at send time
     metadata = None
     status_dict = None
-    is_brandon_thread = participant.lower() == "brandon"
-    if _get_brandon_status and is_brandon_thread:
+    is_human_thread = participant.lower() == "human"
+    if _get_human_status and is_human_thread:
         try:
-            status_dict = _get_brandon_status()
-            metadata = {"brandon_status": status_dict["detail"]}
+            status_dict = _get_human_status()
+            metadata = {"human_status": status_dict["detail"]}
         except Exception:
             pass  # nosec B110 — status fetch failure is non-critical
 
@@ -350,8 +332,9 @@ def tool_start_thread(arg: str | None = None) -> str:
     )
 
     result = f"Thread '{subject}' started with {participant} (id: {thread.id[:8]})."
-    if status_dict and is_brandon_thread:
+    if status_dict and is_human_thread:
         from interface.presence import format_send_confirmation
+
         result += " " + format_send_confirmation(status_dict)
     return result
 
@@ -374,32 +357,6 @@ def tool_search_threads(arg: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def tool_post_agora(message: str | None = None) -> str:
-    """Post a message to the public wall (Agora)."""
-    if not message:
-        return "Error: no message provided. Usage: [POST_AGORA:your message]"
-    if _agora is None:
-        return "Error: agora not initialized"
-    being_name = _active_being_name or "Unknown"
-    being_id = _active_being_id or ""
-    _agora.post_to_agora(being_name, being_id, message)
-    return "Posted to the wall. All beings can see it."
-
-
-def tool_read_agora(arg: str | None = None) -> str:
-    """Read recent posts from the public wall (Agora)."""
-    if _agora is None:
-        return "Error: agora not initialized"
-    posts = _agora.read_agora()
-    if not posts:
-        return "The wall is empty. No one has posted yet."
-    lines = ["Recent posts on the wall:"]
-    for post in posts[:10]:
-        ts = post.posted_at[:16] if post.posted_at else "?"
-        lines.append(f"  {post.being_name} ({ts}): {post.content[:200]}")
-    return "\n".join(lines)
-
-
 TOOL_REGISTRY = {
     "CHECK_WINDOW": tool_check_window,
     "LIST_DIR": tool_list_dir,
@@ -411,6 +368,4 @@ TOOL_REGISTRY = {
     "DISMISS_THREAD": tool_dismiss_thread,
     "START_THREAD": tool_start_thread,
     "SEARCH_THREADS": tool_search_threads,
-    "POST_AGORA": tool_post_agora,
-    "READ_AGORA": tool_read_agora,
 }

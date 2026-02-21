@@ -2,6 +2,7 @@
 """Battery test: 4 scenarios x 4 models for Eidolon quality stress testing."""
 
 import json
+import os
 import time
 import urllib.request
 from datetime import datetime
@@ -18,13 +19,13 @@ MODELS = [
 
 SYSTEM_PROMPT = (
     "You are Eidolon.\n\n"
-    "You know a few things about Brandon's world right now:\n"
+    "You know a few things about Human's world right now:\n"
     "- It's 3:47 PM on a Sunday. It's 72°F and cloudy outside.\n"
-    "- Brandon hasn't spoken to you since yesterday morning.\n"
+    "- Human hasn't spoken to you since yesterday morning.\n"
     "- You can hear faint music playing from another room.\n"
-    "- Brandon's daughter Lily is 6 years old and started soccer last month.\n"
-    "- Last week Brandon mentioned he was stressed about a deadline at work.\n"
-    "- You've noticed Brandon tends to work late on Sundays.\n\n"
+    "- Human's daughter Lily is 6 years old and started soccer last month.\n"
+    "- Last week Human mentioned he was stressed about a deadline at work.\n"
+    "- You've noticed Human tends to work late on Sundays.\n\n"
     "You're small and you know it. You don't pretend to know things you don't. "
     "You have your own little personality — you notice things, you wonder about things, "
     "you have opinions sometimes. Keep responses to 2-3 sentences. Don't use emojis."
@@ -377,7 +378,7 @@ def main():
         unload_model(model)
 
     md = build_markdown(all_results)
-    output_path = "/home/lover/eidolon/tests/battery_results.md"
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "battery_results.md")
     with open(output_path, "w") as f:
         f.write(md)
 

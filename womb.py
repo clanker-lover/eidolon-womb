@@ -14,31 +14,48 @@ sys.path.insert(0, PROJECT_ROOT)
 
 import ollama  # noqa: E402 — must come after sys.path insert
 from config import (  # noqa: E402
-    MODEL_NAME, TEMPERATURE, CONTEXT_WINDOW, RESPONSE_RESERVE, MEMORIES_FILE,
+    MODEL_NAME,
+    TEMPERATURE,
+    CONTEXT_WINDOW,
+    RESPONSE_RESERVE,
+    MEMORIES_FILE,
     CONVERSATIONS_DIR,  # noqa: F401 — re-exported for test patching
-    INNER_VOICE_MAX_RETRIES, MEMORY_EXTRACTION_PROMPT, RETRIEVAL_TOP_K,
-    FATIGUE_TIRED, FATIGUE_VERY_TIRED, FATIGUE_EXHAUSTED,
+    INNER_VOICE_MAX_RETRIES,
+    MEMORY_EXTRACTION_PROMPT,
+    RETRIEVAL_TOP_K,
+    FATIGUE_TIRED,
+    FATIGUE_VERY_TIRED,
+    FATIGUE_EXHAUSTED,
     FATIGUE_INVOLUNTARY_SLEEP,
-    NOTIFICATION_CHECK_INTERVAL, NOTIFICATION_COOLDOWN,
-    HOT_VOICE_LOOKBACK_COUNT, HOT_VOICE_SIMILARITY_THRESHOLD,
+    NOTIFICATION_CHECK_INTERVAL,
+    NOTIFICATION_COOLDOWN,
+    HOT_VOICE_LOOKBACK_COUNT,
+    HOT_VOICE_SIMILARITY_THRESHOLD,
     EMBEDDING_MODEL,
     DEFAULT_SLEEP_HOURS,
     CLOSURE_THOUGHT_COUNT,  # noqa: F401 — re-exported for tests
+    DAEMON_PORT,
 )
 from core.patterns import has_rest_intent as _has_rest_intent  # noqa: E402, F401 — re-exported for tests
-from presence import is_brandon_away  # noqa: E402
+from presence import is_human_away  # noqa: E402
 from tools import fire_notify_send  # noqa: E402
 from brain.perception import build_perception  # noqa: E402
 from brain.context import assemble_messages  # noqa: E402
 from brain.conversation import save_turn  # noqa: E402
 from brain.memory import (  # noqa: E402
-    extract_facts, save_facts,
+    extract_facts,
+    save_facts,
     load_learned_facts,  # noqa: F401 — re-exported for tests
 )
 from brain.retrieval import MemoryIndex  # noqa: E402
 from brain.inner_voice import run_layer1_reflexes, run_layer2_heuristics  # noqa: E402
 from brain.actions import resolve_actions_async  # noqa: E402
-from inner_voices import should_cold_fire, run_cold_voice, run_hot_voice, cosine_similarity  # noqa: E402
+from inner_voices import (
+    should_cold_fire,
+    run_cold_voice,
+    run_hot_voice,
+    cosine_similarity,
+)  # noqa: E402
 from core.threads import ThreadStore  # noqa: E402
 from core.stats import increment as stats_increment  # noqa: E402
 
@@ -48,13 +65,11 @@ SOCKET_PATH = os.path.join(COMPANION_DIR, "companion.sock")
 MESSAGE_QUEUE_FILE = os.path.join(COMPANION_DIR, "message_queue.json")
 DAEMON_LOG_FILE = os.path.join(COMPANION_DIR, "daemon.log")
 DAEMON_HOST = "0.0.0.0"  # nosec B104 — intentional LAN access for local daemon
-DAEMON_PORT = 7777
 SLEEP_CONTEXT_FILE = os.path.join(COMPANION_DIR, "sleep_context.json")
 CLEAN_SHUTDOWN_FILE = os.path.join(COMPANION_DIR, ".clean_shutdown")
 
 # Pacing: thoughts spaced 27 minutes apart. Sleep = consolidation + immediate wake.
-THOUGHT_INTERVAL_SECONDS = 1620   # 27 minutes between thoughts
-
+THOUGHT_INTERVAL_SECONDS = 1620  # 27 minutes between thoughts
 
 
 logger = logging.getLogger("companion_daemon")
@@ -65,6 +80,7 @@ from core.queue import DaemonState, MessageQueue  # noqa: E402
 
 def _format_sleep_memory(ctx: dict) -> str:
     from brain.sleep import format_sleep_memory
+
     return format_sleep_memory(ctx)
 
 
@@ -73,7 +89,7 @@ class EidolonDaemon:
         # Persistent state (survives across client sessions)
         self.identity: str = ""
         self.personality: str = ""
-        self.brandon_facts: list[str] = []
+        self.human_facts: list[str] = []
         self.learned_facts: list[str] = []
         self.memory_index: MemoryIndex | None = None
         self.state = DaemonState.AWAKE_AVAILABLE
@@ -91,7 +107,9 @@ class EidolonDaemon:
         self.fatigue: float = 0.0
         self._wake_time: float = time.time()
         self._sleep_time: float | None = None
-        self._scheduled_wake_time: str | None = None  # ISO timestamp; persisted in sleep context
+        self._scheduled_wake_time: str | None = (
+            None  # ISO timestamp; persisted in sleep context
+        )
 
         # Idle loop
         self._idle_task: asyncio.Task | None = None
@@ -115,10 +133,6 @@ class EidolonDaemon:
         self._shutdown_requested: bool = False
         self._in_thought_cycle: bool = False
         self._snapshot_task: asyncio.Task | None = None
-
-        # Thought pacing (turbo mode)
-        self._thought_interval: int = THOUGHT_INTERVAL_SECONDS
-        self._turbo_changed = asyncio.Event()
 
         # Thread reply serialization
         self._thread_reply_lock = asyncio.Lock()
@@ -154,14 +168,15 @@ class EidolonDaemon:
         self._scheduler = None  # No scheduler in womb
         self._active_model: str = MODEL_NAME
         self._active_being_id: str | None = None
-        self._active_being_name: str = "Eidolon"
+        self._active_being_name: str = "Being"
         self._active_memory_root: str = ""  # Set by load_brain()
 
         # Monitor telemetry
         self._thought_count: int = 0
         self._last_thought_text: str = ""
         self._last_transition: dict = {
-            "from": "init", "to": "awake",
+            "from": "init",
+            "to": "awake",
             "reason": "daemon start",
             "time": datetime.now().isoformat(),
         }
@@ -172,6 +187,7 @@ class EidolonDaemon:
 
     async def load_brain(self, memory_root: str) -> None:
         from daemon.lifecycle import load_brain as _load_brain
+
         return await _load_brain(self, memory_root)
 
     # ------------------------------------------------------------------
@@ -180,7 +196,12 @@ class EidolonDaemon:
 
     def _update_fatigue(self, tokens_used: int) -> None:
         self.fatigue = min(1.0, tokens_used / CONTEXT_WINDOW)
-        logger.debug("Context pressure: %d/%d tokens (%.0f%%)", tokens_used, CONTEXT_WINDOW, self.fatigue * 100)
+        logger.debug(
+            "Context pressure: %d/%d tokens (%.0f%%)",
+            tokens_used,
+            CONTEXT_WINDOW,
+            self.fatigue * 100,
+        )
 
     def _fatigue_label(self) -> str:
         if self.fatigue < FATIGUE_TIRED:
@@ -203,11 +224,14 @@ class EidolonDaemon:
         if self.fatigue < FATIGUE_INVOLUNTARY_SLEEP:
             return False
         if writer:
-            await self._send(writer, {
-                "type": "status",
-                "state": "asleep",
-                "content": "Eidolon fell asleep from exhaustion.",
-            })
+            await self._send(
+                writer,
+                {
+                    "type": "status",
+                    "state": "asleep",
+                    "content": f"{self._active_being_name} fell asleep from exhaustion.",
+                },
+            )
         await self.transition_to_sleep(voluntary=False, hours=DEFAULT_SLEEP_HOURS)
         return True
 
@@ -217,10 +241,12 @@ class EidolonDaemon:
 
     def _count_voice_firings_since(self, since: float | None) -> tuple[int, int]:
         from brain.sleep import count_voice_firings_since
+
         return count_voice_firings_since(self, since)
 
     def _capture_sleep_context(self, voluntary: bool, hours: int) -> None:
         from brain.sleep import capture_sleep_context
+
         capture_sleep_context(self, voluntary, hours)
 
     # ------------------------------------------------------------------
@@ -250,9 +276,13 @@ class EidolonDaemon:
     async def process_message(self, user_input: str) -> str:
         # 1. Perception
         perception = await asyncio.to_thread(
-            build_perception, registry=self._registry, being_name=self._active_being_name,
+            build_perception,
+            registry=self._registry,
+            being_name=self._active_being_name,
         )
-        perception += f"\n- Energy: {self._fatigue_label()} (fatigue {self.fatigue:.0%})"
+        perception += (
+            f"\n- Energy: {self._fatigue_label()} (fatigue {self.fatigue:.0%})"
+        )
 
         # 2. Memory retrieval
         retrieved = []
@@ -263,8 +293,14 @@ class EidolonDaemon:
 
         # 3. Assemble messages (pure function, no thread needed)
         messages, tokens_used = assemble_messages(
-            perception, self.identity, self.personality, self.brandon_facts,
-            self.learned_facts, self.history, user_input, self.session_summaries,
+            perception,
+            self.identity,
+            self.personality,
+            self.human_facts,
+            self.learned_facts,
+            self.history,
+            user_input,
+            self.session_summaries,
             retrieved_memories=retrieved,
         )
         self._update_fatigue(tokens_used)
@@ -281,7 +317,9 @@ class EidolonDaemon:
             self._notified_this_cycle = False
             msg_count_before = len(messages)
             reply = await resolve_actions_async(
-                reply, self.generate_reply, messages,
+                reply,
+                self.generate_reply,
+                messages,
                 already_notified_this_cycle=self._notified_this_cycle,
             )
             if len(messages) > msg_count_before and self._active_being_id:
@@ -309,15 +347,24 @@ class EidolonDaemon:
 
         # 6b. Cold voice check on chat response
         try:
-            retrieved_texts = [m["text"] if isinstance(m, dict) else m for m in retrieved]
-            if should_cold_fire(reply, perception, retrieved_texts, being_name=self._active_being_name):
+            retrieved_texts = [
+                m["text"] if isinstance(m, dict) else m for m in retrieved
+            ]
+            if should_cold_fire(
+                reply, perception, retrieved_texts, being_name=self._active_being_name
+            ):
                 cold_output = await asyncio.to_thread(
                     run_cold_voice, reply, perception, retrieved_texts
                 )
                 logger.info("Cold voice fired during chat: %s", cold_output[:120])
                 # Regenerate with cold voice interjection prepended
                 messages.append({"role": "assistant", "content": reply})
-                messages.append({"role": "user", "content": f"A rational part of you objects: {cold_output}"})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"A rational part of you objects: {cold_output}",
+                    }
+                )
                 try:
                     reply = await self.generate_reply(messages)
                 except Exception as e:
@@ -327,7 +374,9 @@ class EidolonDaemon:
 
         # 6c. Hot voice check — semantic similarity against recent assistant replies
         try:
-            prior_assistant = [m["content"] for m in self.history if m["role"] == "assistant"]
+            prior_assistant = [
+                m["content"] for m in self.history if m["role"] == "assistant"
+            ]
             if len(prior_assistant) >= 2:
                 recent = prior_assistant[-HOT_VOICE_LOOKBACK_COUNT:]
                 texts = [reply] + recent
@@ -337,13 +386,19 @@ class EidolonDaemon:
                 vecs = embed_response["embeddings"]
                 reply_vec = vecs[0]
                 if any(
-                    cosine_similarity(reply_vec, vecs[i + 1]) >= HOT_VOICE_SIMILARITY_THRESHOLD
+                    cosine_similarity(reply_vec, vecs[i + 1])
+                    >= HOT_VOICE_SIMILARITY_THRESHOLD
                     for i in range(len(recent))
                 ):
                     hot_output = await asyncio.to_thread(run_hot_voice, reply)
                     logger.info("Hot voice fired during chat: %s", hot_output[:120])
                     messages.append({"role": "assistant", "content": reply})
-                    messages.append({"role": "user", "content": f"A spontaneous part of you interjects: {hot_output}"})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": f"A spontaneous part of you interjects: {hot_output}",
+                        }
+                    )
                     try:
                         reply = await self.generate_reply(messages)
                     except Exception as e:
@@ -358,19 +413,27 @@ class EidolonDaemon:
         # 8. Save turn
         try:
             if self.session_filepath:
-                await asyncio.to_thread(save_turn, self.session_filepath, user_input, reply)
+                await asyncio.to_thread(
+                    save_turn, self.session_filepath, user_input, reply
+                )
         except Exception as e:
             logger.error("Conversation save error: %s", e)
 
         # 9-11. Extract and save facts, rebuild index if needed
         try:
             new_facts = await asyncio.to_thread(
-                extract_facts, user_input, self._active_model,
-                MEMORY_EXTRACTION_PROMPT, CONTEXT_WINDOW,
+                extract_facts,
+                user_input,
+                self._active_model,
+                MEMORY_EXTRACTION_PROMPT,
+                CONTEXT_WINDOW,
             )
             self.learned_facts = await asyncio.to_thread(
-                save_facts, self._active_memory_root, MEMORIES_FILE,
-                new_facts, self.learned_facts,
+                save_facts,
+                self._active_memory_root,
+                MEMORIES_FILE,
+                new_facts,
+                self.learned_facts,
             )
             if new_facts and self.memory_index:
                 await asyncio.to_thread(self.memory_index.rebuild)
@@ -385,26 +448,35 @@ class EidolonDaemon:
 
     async def start_session(self) -> None:
         from daemon.lifecycle import start_session as _start_session
+
         return await _start_session(self)
 
     async def end_session(self) -> None:
         from daemon.lifecycle import end_session as _end_session
+
         return await _end_session(self)
 
     # ------------------------------------------------------------------
     # State transitions
     # ------------------------------------------------------------------
 
-    async def transition_to_sleep(self, voluntary: bool = True, hours: int = DEFAULT_SLEEP_HOURS) -> None:
+    async def transition_to_sleep(
+        self, voluntary: bool = True, hours: int = DEFAULT_SLEEP_HOURS
+    ) -> None:
         from brain.sleep import transition_to_sleep as _tts
+
         return await _tts(self, voluntary=voluntary, hours=hours)
 
     def _should_being_stay_asleep(self) -> bool:
         from brain.sleep import should_being_stay_asleep
+
         return should_being_stay_asleep(self)
 
-    async def transition_to_awake(self, reason: str = "client connect") -> list[tuple[str, str, str]]:
+    async def transition_to_awake(
+        self, reason: str = "client connect"
+    ) -> list[tuple[str, str, str]]:
         from brain.sleep import transition_to_awake as _tta
+
         return await _tta(self, reason=reason)
 
     # ------------------------------------------------------------------
@@ -460,13 +532,8 @@ class EidolonDaemon:
             # One presence/notification check between thoughts
             await self._check_presence_and_notifications()
 
-            # Pace thoughts — interruptible so turbo changes take effect immediately
-            self._turbo_changed.clear()
-            try:
-                await asyncio.wait_for(self._turbo_changed.wait(), timeout=self._thought_interval)
-                logger.info("Thought pacing interrupted by turbo change.")
-            except asyncio.TimeoutError:
-                pass
+            # Pace thoughts
+            await asyncio.sleep(THOUGHT_INTERVAL_SECONDS)
 
     # ------------------------------------------------------------------
     # Snapshot loop — periodic state persistence for crash recovery
@@ -486,16 +553,18 @@ class EidolonDaemon:
 
     async def _thought_cycle(self) -> None:
         from brain.cycle import thought_cycle
+
         return await thought_cycle(self)
 
     async def _thought_cycle_inner(self) -> None:
         from brain.cycle import thought_cycle_inner
+
         return await thought_cycle_inner(self)
 
     async def _check_presence_and_notifications(self) -> None:
         """Check for presence changes and fire notifications. Non-blocking."""
         try:
-            current_away = await asyncio.to_thread(is_brandon_away)
+            current_away = await asyncio.to_thread(is_human_away)
             if current_away != self._last_presence_away:
                 logger.info("Presence changed, starting fresh thought chain.")
                 self._idle_history = []
@@ -516,7 +585,8 @@ class EidolonDaemon:
                     if not current_away:
                         cooldown_ok = (
                             self.notification_sent_at is None
-                            or (now - self.notification_sent_at) >= NOTIFICATION_COOLDOWN
+                            or (now - self.notification_sent_at)
+                            >= NOTIFICATION_COOLDOWN
                         )
                         if cooldown_ok or just_returned:
                             entry = self.pending_notifications.pop(0)
@@ -537,15 +607,28 @@ class EidolonDaemon:
     # ------------------------------------------------------------------
 
     _STATE_KEYS = (
-        "_idle_history", "_previous_thoughts",
-        "_choosing_sleep", "_choosing_sleep_involuntary",
-        "fatigue", "_continuation_had_tools", "_cycles_since_tool_use",
-        "_last_voice_name", "_composing_thread_to", "_composing_thread_topic",
-        "_pending_thread_engagement", "_thread_engage_cooldown_id",
-        "_thread_engage_cooldown_cycles", "_thought_count", "_last_thought_text",
-        "_wake_time", "_sleep_time", "_scheduled_wake_time",
-        "_last_thread_creation_cycle", "_thread_response_history",
-        "_pending_search_result", "_last_intent_search_time",
+        "_idle_history",
+        "_previous_thoughts",
+        "_choosing_sleep",
+        "_choosing_sleep_involuntary",
+        "fatigue",
+        "_continuation_had_tools",
+        "_cycles_since_tool_use",
+        "_last_voice_name",
+        "_composing_thread_to",
+        "_composing_thread_topic",
+        "_pending_thread_engagement",
+        "_thread_engage_cooldown_id",
+        "_thread_engage_cooldown_cycles",
+        "_thought_count",
+        "_last_thought_text",
+        "_wake_time",
+        "_sleep_time",
+        "_scheduled_wake_time",
+        "_last_thread_creation_cycle",
+        "_thread_response_history",
+        "_pending_search_result",
+        "_last_intent_search_time",
     )
 
     def _state_file_path(self) -> str:
@@ -554,6 +637,7 @@ class EidolonDaemon:
     def _persist_state(self) -> None:
         """Write mutable state to disk for restart recovery."""
         import copy
+
         state = {key: copy.deepcopy(getattr(self, key)) for key in self._STATE_KEYS}
         try:
             os.makedirs(COMPANION_DIR, exist_ok=True)
@@ -565,6 +649,7 @@ class EidolonDaemon:
     def _load_persisted_state(self) -> None:
         """Load state from disk on startup."""
         import copy
+
         path = self._state_file_path()
         if not os.path.exists(path):
             return
@@ -574,8 +659,11 @@ class EidolonDaemon:
             for key, value in state.items():
                 if key in self._STATE_KEYS:
                     setattr(self, key, copy.deepcopy(value))
-            logger.info("Restored persisted state (fatigue=%.0f%%, thoughts=%d).",
-                        self.fatigue * 100, self._thought_count)
+            logger.info(
+                "Restored persisted state (fatigue=%.0f%%, thoughts=%d).",
+                self.fatigue * 100,
+                self._thought_count,
+            )
         except Exception as e:
             logger.error("Failed to load persisted state: %s", e)
 
@@ -637,11 +725,13 @@ class EidolonDaemon:
     def _is_duplicate_thread_response(self, thread_id: str, reply: str) -> bool:
         """Check if reply is too similar to a previous response in this thread."""
         from interface.threads_handler import is_duplicate_thread_response
+
         return is_duplicate_thread_response(self, thread_id, reply)
 
     def _record_thread_response(self, thread_id: str, reply: str) -> None:
         """Record a thread response for future dedup checks."""
         from interface.threads_handler import record_thread_response
+
         record_thread_response(self, thread_id, reply)
 
     # ------------------------------------------------------------------
@@ -650,24 +740,26 @@ class EidolonDaemon:
 
     def _queue_notification(self, message: str) -> str:
         from interface.notifications import queue_notification
+
         return queue_notification(self, message)
 
     async def _handle_peek(self, writer: asyncio.StreamWriter) -> None:
         from daemon.server import _handle_peek as _hp
-        return await _hp(self, writer)
 
-    async def _handle_turbo(self, msg: dict, writer: asyncio.StreamWriter) -> None:
-        from daemon.server import _handle_turbo as _ht
-        return await _ht(self, msg, writer)
+        return await _hp(self, writer)
 
     async def _engage_thread(self, thread_id: str, user_message: str) -> str:
         """Generate a being's reply to a thread through the full thought pipeline."""
         from interface.threads_handler import engage_thread
+
         return await engage_thread(self, thread_id, user_message)
 
-    async def _handle_thread_reply(self, msg: dict, writer: asyncio.StreamWriter) -> None:
+    async def _handle_thread_reply(
+        self, msg: dict, writer: asyncio.StreamWriter
+    ) -> None:
         """Handle a thread reply request — full being pipeline."""
         from interface.threads_handler import handle_thread_reply
+
         return await handle_thread_reply(self, msg, writer)
 
     # ------------------------------------------------------------------
@@ -675,9 +767,12 @@ class EidolonDaemon:
     # ------------------------------------------------------------------
 
     async def handle_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
     ) -> None:
         from daemon.server import handle_client as _hc
+
         return await _hc(self, reader, writer)
 
     # ------------------------------------------------------------------
@@ -686,10 +781,12 @@ class EidolonDaemon:
 
     async def _dispatch(self, msg: dict, writer: asyncio.StreamWriter) -> None:
         from daemon.server import _dispatch as _d
+
         return await _d(self, msg, writer)
 
     async def _handle_command(self, command: str, writer: asyncio.StreamWriter) -> None:
         from daemon.server import _handle_command as _hcmd
+
         return await _hcmd(self, command, writer)
 
     # ------------------------------------------------------------------
@@ -697,12 +794,16 @@ class EidolonDaemon:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_arrival_prompt(queued: list[tuple[str, str, str]], being_id: str | None = None) -> str:
+    def _build_arrival_prompt(
+        queued: list[tuple[str, str, str]], being_id: str | None = None
+    ) -> str:
         from daemon.server import _build_arrival_prompt as _bap
+
         return _bap(queued, being_id=being_id)
 
     async def _send(self, writer: asyncio.StreamWriter, data: dict) -> None:
         from daemon.server import _send as _s
+
         return await _s(self, writer, data)
 
     # ------------------------------------------------------------------
@@ -711,14 +812,17 @@ class EidolonDaemon:
 
     async def run(self) -> None:
         from daemon.lifecycle import run as _run
+
         return await _run(self)
 
     def _setup_signal_handlers(self, loop) -> None:
         from daemon.lifecycle import _setup_signal_handlers as _ssh
+
         return _ssh(self, loop)
 
     def _signal_shutdown(self) -> None:
         from daemon.lifecycle import _signal_shutdown as _ss
+
         return _ss(self)
 
 

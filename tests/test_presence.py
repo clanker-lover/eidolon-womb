@@ -1,4 +1,4 @@
-"""Tests for presence.py — Brandon status detection."""
+"""Tests for presence.py — Human status detection."""
 
 import os
 import sys
@@ -10,7 +10,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from presence import (  # noqa: E402
-    BrandonStatus, _in_sleep_window,
+    HumanStatus, _in_sleep_window,
     format_send_confirmation, get_pending_replies,
 )
 
@@ -54,7 +54,7 @@ class TestFormatSendConfirmation(unittest.TestCase):
 
     def test_present_status(self):
         status = {
-            "status": BrandonStatus.PRESENT,
+            "status": HumanStatus.PRESENT,
             "projection": "within 30 min - 2.5 hrs",
             "cycle_projection": "~1-6 cycles",
         }
@@ -64,7 +64,7 @@ class TestFormatSendConfirmation(unittest.TestCase):
 
     def test_away_status(self):
         status = {
-            "status": BrandonStatus.AWAY,
+            "status": HumanStatus.AWAY,
             "projection": "within 3-6 hours",
             "cycle_projection": "~7-13 cycles",
         }
@@ -74,7 +74,7 @@ class TestFormatSendConfirmation(unittest.TestCase):
 
     def test_asleep_status(self):
         status = {
-            "status": BrandonStatus.ASLEEP,
+            "status": HumanStatus.ASLEEP,
             "projection": "not until morning (after 6 AM)",
             "cycle_projection": "~13-18 cycles",
         }
@@ -86,7 +86,7 @@ class TestFormatSendConfirmation(unittest.TestCase):
 class TestGetPendingReplies(unittest.TestCase):
     """Test pending reply detection."""
 
-    def test_no_brandon_threads(self):
+    def test_no_human_threads(self):
         mock_store = MagicMock()
         mock_thread = MagicMock()
         mock_thread.participants = ["Eidolon", "Psyche"]
@@ -95,36 +95,36 @@ class TestGetPendingReplies(unittest.TestCase):
         result = get_pending_replies(mock_store, "Eidolon", {})
         self.assertEqual(result, [])
 
-    def test_brandon_already_replied(self):
+    def test_human_already_replied(self):
         mock_store = MagicMock()
         mock_thread = MagicMock()
-        mock_thread.participants = ["Eidolon", "Brandon"]
+        mock_thread.participants = ["Eidolon", "Human"]
         mock_msg = MagicMock()
-        mock_msg.author = "Brandon"
+        mock_msg.author = "Human"
         mock_thread.messages = [mock_msg]
         mock_store.list_threads.return_value = [mock_thread]
 
         result = get_pending_replies(mock_store, "Eidolon", {})
         self.assertEqual(result, [])
 
-    def test_awaiting_brandon_reply(self):
+    def test_awaiting_human_reply(self):
         mock_store = MagicMock()
         mock_thread = MagicMock()
         mock_thread.id = "test-thread-id"
         mock_thread.subject = "Test Subject"
-        mock_thread.participants = ["Eidolon", "Brandon"]
+        mock_thread.participants = ["Eidolon", "Human"]
         mock_msg = MagicMock()
         mock_msg.author = "Eidolon"
         mock_msg.timestamp = datetime.now().isoformat()
-        mock_msg.metadata = {"brandon_status": "Brandon is at his PC"}
+        mock_msg.metadata = {"human_status": "Human is at his PC"}
         mock_thread.messages = [mock_msg]
         mock_store.list_threads.return_value = [mock_thread]
 
-        result = get_pending_replies(mock_store, "Eidolon", {"detail": "Brandon is away"})
+        result = get_pending_replies(mock_store, "Eidolon", {"detail": "Human is away"})
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["subject"], "Test Subject")
-        self.assertEqual(result[0]["status_at_send"], "Brandon is at his PC")
-        self.assertEqual(result[0]["status_now"], "Brandon is away")
+        self.assertEqual(result[0]["status_at_send"], "Human is at his PC")
+        self.assertEqual(result[0]["status_now"], "Human is away")
 
 
 class TestMetadataBackwardCompat(unittest.TestCase):
@@ -135,7 +135,7 @@ class TestMetadataBackwardCompat(unittest.TestCase):
         mock_thread = MagicMock()
         mock_thread.id = "test-id"
         mock_thread.subject = "Old Thread"
-        mock_thread.participants = ["Eidolon", "Brandon"]
+        mock_thread.participants = ["Eidolon", "Human"]
         mock_msg = MagicMock()
         mock_msg.author = "Eidolon"
         mock_msg.timestamp = datetime.now().isoformat()
@@ -143,7 +143,7 @@ class TestMetadataBackwardCompat(unittest.TestCase):
         mock_thread.messages = [mock_msg]
         mock_store.list_threads.return_value = [mock_thread]
 
-        result = get_pending_replies(mock_store, "Eidolon", {"detail": "Brandon is away"})
+        result = get_pending_replies(mock_store, "Eidolon", {"detail": "Human is away"})
         self.assertEqual(len(result), 1)
         self.assertIsNone(result[0]["status_at_send"])
 

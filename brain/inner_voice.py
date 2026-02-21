@@ -3,19 +3,53 @@ import re
 from datetime import datetime
 
 SENSORY_WORDS = [
-    "see", "seeing", "saw", "seen", "look",
-    "watch", "watching", "watched",
-    "spot", "spotted", "notice", "noticed",
-    "hear", "hearing", "heard", "listen", "listening", "sound", "sounds",
-    "smell", "smelling",
-    "feel", "feeling", "felt", "touch",
-    "temperature", "warm", "cold", "hot", "cool",
-    "weather", "rain", "snow", "sunny", "cloudy",
-    "light", "dark", "bright", "dim",
-    "wind", "breeze",
-    "sit", "sitting",
+    "see",
+    "seeing",
+    "saw",
+    "seen",
+    "look",
+    "watch",
+    "watching",
+    "watched",
+    "spot",
+    "spotted",
+    "notice",
+    "noticed",
+    "hear",
+    "hearing",
+    "heard",
+    "listen",
+    "listening",
+    "sound",
+    "sounds",
+    "smell",
+    "smelling",
+    "feel",
+    "feeling",
+    "felt",
+    "touch",
+    "temperature",
+    "warm",
+    "cold",
+    "hot",
+    "cool",
+    "weather",
+    "rain",
+    "snow",
+    "sunny",
+    "cloudy",
+    "light",
+    "dark",
+    "bright",
+    "dim",
+    "wind",
+    "breeze",
+    "sit",
+    "sitting",
     "screen",
-    "sunrise", "sunset", "sky",
+    "sunrise",
+    "sunset",
+    "sky",
 ]
 
 _SENSORY_PATTERN = re.compile(
@@ -101,11 +135,11 @@ def check_hallucinated_senses(
     return None
 
 
-def check_third_person_brandon(response: str) -> str | None:
-    if re.search(r"\bBrandon\b", response):
+def check_third_person_human(response: str) -> str | None:
+    if re.search(r"\bHuman\b", response):
         return (
-            "You referred to Brandon by name. You're talking TO him, not about him. "
-            "Use 'you' instead of 'Brandon'."
+            "You referred to Human by name. You're talking TO him, not about him. "
+            "Use 'you' instead of 'Human'."
         )
     return None
 
@@ -131,11 +165,11 @@ _NARRATION_HIS_BODY = re.compile(
 
 
 def check_narration(response: str) -> str | None:
-    """Detect the being narrating Brandon's physical actions like a novel."""
+    """Detect the being narrating Human's physical actions like a novel."""
     if _NARRATION_HE_ACTION.search(response) or _NARRATION_HIS_BODY.search(response):
         return (
-            "You're narrating Brandon's actions like a story. "
-            "You're talking TO Brandon, not describing what he does. "
+            "You're narrating Human's actions like a story. "
+            "You're talking TO Human, not describing what he does. "
             "Just respond to him directly."
         )
     return None
@@ -145,25 +179,45 @@ _FABRICATED_TOOL_PATTERNS = [
     # Filesystem fabrication
     re.compile(r"the \w+ directory (contains|has|is)", re.IGNORECASE),
     re.compile(r"here are the (contents|files|directories)", re.IGNORECASE),
-    re.compile(r"i (see|found|notice) the following (files|directories|folders)", re.IGNORECASE),
+    re.compile(
+        r"i (see|found|notice) the following (files|directories|folders)", re.IGNORECASE
+    ),
     re.compile(r"the (contents|listing) (shows|reveals|includes)", re.IGNORECASE),
     re.compile(r"the directory (listing|structure|tree)", re.IGNORECASE),
     re.compile(r"contains the following (files|folders|subdirectories)", re.IGNORECASE),
     # RSS / news fabrication
-    re.compile(r"here are the (?:latest |top |recent |current )?(headlines|stories|articles|news)", re.IGNORECASE),
-    re.compile(r"the (?:latest|top|recent|current) (headlines|stories|articles|news)", re.IGNORECASE),
-    re.compile(r"the (?:rss|news) feed (shows|contains|has|returns|says)", re.IGNORECASE),
+    re.compile(
+        r"here are the (?:latest |top |recent |current )?(headlines|stories|articles|news)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"the (?:latest|top|recent|current) (headlines|stories|articles|news)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"the (?:rss|news) feed (shows|contains|has|returns|says)", re.IGNORECASE
+    ),
     re.compile(r"(?:from|according to) the (?:rss |news )?feed", re.IGNORECASE),
     # Webpage content fabrication
-    re.compile(r"the (article|page|webpage|website|wiki\w*) (says|states|mentions|explains|describes|reads|contains)", re.IGNORECASE),
-    re.compile(r"according to the (article|page|webpage|website|wiki\w*)", re.IGNORECASE),
+    re.compile(
+        r"the (article|page|webpage|website|wiki\w*) (says|states|mentions|explains|describes|reads|contains)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"according to the (article|page|webpage|website|wiki\w*)", re.IGNORECASE
+    ),
     # General content fabrication
-    re.compile(r"i (?:see|found|notice|read) the following (articles?|stories|headlines|results)", re.IGNORECASE),
+    re.compile(
+        r"i (?:see|found|notice|read) the following (articles?|stories|headlines|results)",
+        re.IGNORECASE,
+    ),
     re.compile(r"here are the (results|findings|articles|stories)", re.IGNORECASE),
 ]
 
 
-def check_fabricated_tool_output(response: str, *, had_tool_result: bool = False) -> str | None:
+def check_fabricated_tool_output(
+    response: str, *, had_tool_result: bool = False
+) -> str | None:
     """Detect fabricated filesystem/tool responses when no real tool fired."""
     if had_tool_result:
         return None
@@ -206,12 +260,16 @@ def check_peer_sycophancy(response: str) -> str | None:
 
 
 def run_layer1_reflexes(
-    response: str, perception: str, identity: str, personality: str,
-    *, had_tool_result: bool = False,
+    response: str,
+    perception: str,
+    identity: str,
+    personality: str,
+    *,
+    had_tool_result: bool = False,
 ) -> tuple[bool, str | None]:
     checks = [
         check_hallucinated_senses(response, perception, identity, personality),
-        check_third_person_brandon(response),
+        check_third_person_human(response),
         check_narration(response),
         check_assistant_collapse(response),
         check_peer_sycophancy(response),
@@ -257,4 +315,4 @@ def run_layer2_heuristics(response: str, log_file: str) -> None:
     preview = response[:100].replace("\n", " ")
     with open(log_file, "a") as f:
         for v in violations:
-            f.write(f"[{timestamp}] {v} | \"{preview}...\"\n")
+            f.write(f'[{timestamp}] {v} | "{preview}..."\n')

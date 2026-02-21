@@ -1,6 +1,6 @@
 from config import MAX_PROMPT_TOKENS, CHARS_PER_TOKEN, SYSTEM_GUARDRAILS
 
-THREAD_CONTEXT_BUDGET = 8000   # tokens typical, 12000 worst case
+THREAD_CONTEXT_BUDGET = 8000  # tokens typical, 12000 worst case
 THREAD_CONTEXT_MAX = 12000
 
 
@@ -12,7 +12,7 @@ def assemble_messages(
     perception: str,
     identity: str,
     personality: str,
-    brandon_facts: list[str],
+    human_facts: list[str],
     learned_facts: list[str],
     history: list[dict],
     user_message: str,
@@ -45,12 +45,12 @@ def assemble_messages(
             remaining -= personality_cost
 
     # P3: facts (seed + learned) — seed facts first, then learned newest-first
-    facts_header = "[What you know about Brandon]\n"
+    facts_header = "[What you know about Human]\n"
     header_cost = estimate_tokens(facts_header)
 
     included_seed = []
-    if brandon_facts:
-        for fact in brandon_facts:
+    if human_facts:
+        for fact in human_facts:
             fact_line = f"- {fact}"
             fact_cost = estimate_tokens(fact_line)
             if fact_cost <= remaining - header_cost:
@@ -150,7 +150,9 @@ def assemble_thread_context(
 
     # Relationship file
     if relationship_file:
-        rel_section = f"[Your relationship with the other participant]\n{relationship_file}"
+        rel_section = (
+            f"[Your relationship with the other participant]\n{relationship_file}"
+        )
         cost = estimate_tokens(rel_section)
         if cost <= remaining:
             system_parts.append(rel_section)

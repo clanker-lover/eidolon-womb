@@ -10,17 +10,18 @@ root = get_project_root()
 data_dir = os.path.join(root, "data")
 
 # --- Search ---
-search = st.text_input("Filter files by name", placeholder="e.g. brandon, identity, facts")
+search = st.text_input(
+    "Filter files by name", placeholder="e.g. human, identity, facts"
+)
 
 # --- Directory browser ---
 SECTIONS = [
-    ("Identity & Personality", "", ["identity.md", "personality.md", "brandon.md"]),
+    ("Identity & Personality", "", ["identity.md", "personality.md", "Human.md"]),
     ("Conversations", "conversations", None),
     ("Archived Conversations", os.path.join("conversations", "archived"), None),
     ("Memories", "memories", None),
     ("Consolidated Memories", os.path.join("memories", "consolidated"), None),
     ("Logs", "logs", None),
-    ("Agora", "agora", None),
 ]
 
 for section_name, subdir, explicit_files in SECTIONS:
@@ -32,7 +33,8 @@ for section_name, subdir, explicit_files in SECTIONS:
         if not os.path.isdir(full_dir):
             continue
         files = [
-            f for f in sorted(os.listdir(full_dir), reverse=True)
+            f
+            for f in sorted(os.listdir(full_dir), reverse=True)
             if os.path.isfile(os.path.join(full_dir, f))
         ]
 

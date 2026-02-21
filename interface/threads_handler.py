@@ -36,8 +36,9 @@ def record_thread_response(daemon, thread_id: str, reply: str) -> None:
         daemon._thread_response_history[thread_id] = []
     daemon._thread_response_history[thread_id].append(reply)
     # Keep only last 10 per thread
-    daemon._thread_response_history[thread_id] = \
-        daemon._thread_response_history[thread_id][-10:]
+    daemon._thread_response_history[thread_id] = daemon._thread_response_history[
+        thread_id
+    ][-10:]
 
 
 async def engage_thread(daemon, thread_id: str, user_message: str) -> str:
@@ -58,8 +59,10 @@ async def engage_thread(daemon, thread_id: str, user_message: str) -> str:
     rel_file = ""
     if other:
         rel_file = await asyncio.to_thread(
-            load_relationship, daemon.project_root,
-            daemon._active_memory_root, other[0],
+            load_relationship,
+            daemon.project_root,
+            daemon._active_memory_root,
+            other[0],
         )
 
     # Build recent messages as chat history (enough context to ground the being)
@@ -67,7 +70,9 @@ async def engage_thread(daemon, thread_id: str, user_message: str) -> str:
     recent_as_history = []
     for msg in recent:
         role = "assistant" if msg.author == daemon._active_being_name else "user"
-        recent_as_history.append({"role": role, "content": f"{msg.author}: {msg.content}"})
+        recent_as_history.append(
+            {"role": role, "content": f"{msg.author}: {msg.content}"}
+        )
 
     # Assemble thread context
     perception = await asyncio.to_thread(
@@ -76,7 +81,9 @@ async def engage_thread(daemon, thread_id: str, user_message: str) -> str:
         being_name=daemon._active_being_name,
         registry=daemon._registry,
     )
-    perception += f"\n- Energy: {daemon._fatigue_label()} (fatigue {daemon.fatigue:.0%})"
+    perception += (
+        f"\n- Energy: {daemon._fatigue_label()} (fatigue {daemon.fatigue:.0%})"
+    )
 
     messages, tokens_used = assemble_thread_context(
         perception=perception,
@@ -99,7 +106,10 @@ async def engage_thread(daemon, thread_id: str, user_message: str) -> str:
     # Full inner voice Layer 1 checks
     for _ in range(INNER_VOICE_MAX_RETRIES):
         passed, correction = run_layer1_reflexes(
-            reply, perception, daemon.identity, daemon.personality,
+            reply,
+            perception,
+            daemon.identity,
+            daemon.personality,
         )
         if passed:
             break
@@ -113,15 +123,17 @@ async def engage_thread(daemon, thread_id: str, user_message: str) -> str:
 
     # Hot voice — detect similarity loops against this being's prior thread messages
     own_prior = [
-        m.content for m in thread.messages
-        if m.author == daemon._active_being_name
+        m.content for m in thread.messages if m.author == daemon._active_being_name
     ][-HOT_VOICE_LOOKBACK_COUNT:]
     if own_prior and all(
         word_overlap_ratio(reply, prev) >= HOT_VOICE_SIMILARITY_THRESHOLD
         for prev in own_prior
     ):
-        logger.info("Thread hot voice fired for %s in thread %s",
-                     daemon._active_being_name, thread_id[:8])
+        logger.info(
+            "Thread hot voice fired for %s in thread %s",
+            daemon._active_being_name,
+            thread_id[:8],
+        )
         hot_output = await asyncio.to_thread(run_hot_voice, reply)
         messages.append({"role": "assistant", "content": reply})
         messages.append({"role": "user", "content": hot_output})
@@ -150,7 +162,7 @@ async def engage_thread(daemon, thread_id: str, user_message: str) -> str:
 async def handle_thread_reply(daemon, msg: dict, writer: asyncio.StreamWriter) -> None:
     """Handle a thread reply request — full being pipeline.
 
-    Always appends Brandon's message immediately.  If a being response
+    Always appends Human's message immediately.  If a being response
     is already being generated (lock held), returns a confirmation
     instead of blocking — the being will see all messages on its next cycle.
 
@@ -158,7 +170,7 @@ async def handle_thread_reply(daemon, msg: dict, writer: asyncio.StreamWriter) -
     daemon._active_being_id, daemon._registry
     Calls: daemon._swap_being_context(), daemon._send()
     """
-    being_name = msg.get("being", "Eidolon")
+    being_name = msg.get("being", daemon._active_being_name)
     thread_id = msg.get("thread_id", "").strip()
     content = msg.get("content", "").strip()
 
@@ -169,7 +181,9 @@ async def handle_thread_reply(daemon, msg: dict, writer: asyncio.StreamWriter) -
         await daemon._send(writer, {"type": "error", "content": "No message content."})
         return
     if not daemon._thread_store:
-        await daemon._send(writer, {"type": "error", "content": "Thread system not initialized."})
+        await daemon._send(
+            writer, {"type": "error", "content": "Thread system not initialized."}
+        )
         return
 
     # Resolve being
@@ -177,14 +191,16 @@ async def handle_thread_reply(daemon, msg: dict, writer: asyncio.StreamWriter) -
     if daemon._registry:
         chat_being = daemon._registry.get_being_by_name(being_name)
     if not chat_being:
-        await daemon._send(writer, {"type": "error", "content": f"Unknown being: {being_name}"})
+        await daemon._send(
+            writer, {"type": "error", "content": f"Unknown being: {being_name}"}
+        )
         return
 
-    # Always append Brandon's message immediately — never lose it
+    # Always append Human's message immediately — never lose it
     daemon._thread_store.append_message(
         thread_id,
         ThreadMessage(
-            author="Brandon",
+            author="Human",
             content=content,
             timestamp=datetime.now().isoformat(),
         ),
@@ -193,11 +209,14 @@ async def handle_thread_reply(daemon, msg: dict, writer: asyncio.StreamWriter) -
     # Try to generate a being response — but don't block if busy
     if daemon._thread_reply_lock.locked():
         logger.info("Thread reply queued (being busy): %s", content[:80])
-        await daemon._send(writer, {
-            "type": "response",
-            "content": f"(Message appended. {being_name} is still thinking — will see it next cycle.)",
-            "being": being_name,
-        })
+        await daemon._send(
+            writer,
+            {
+                "type": "response",
+                "content": f"(Message appended. {being_name} is still thinking — will see it next cycle.)",
+                "being": being_name,
+            },
+        )
         return
 
     prev_being_id = daemon._active_being_id
@@ -205,16 +224,21 @@ async def handle_thread_reply(daemon, msg: dict, writer: asyncio.StreamWriter) -
         try:
             await daemon._swap_being_context(chat_being)
             reply = await engage_thread(daemon, thread_id, content)
-            await daemon._send(writer, {
-                "type": "response",
-                "content": reply,
-                "being": being_name,
-            })
+            await daemon._send(
+                writer,
+                {
+                    "type": "response",
+                    "content": reply,
+                    "being": being_name,
+                },
+            )
         except Exception as e:
             logger.error("Thread reply error: %s", e)
             await daemon._send(writer, {"type": "error", "content": str(e)})
         finally:
             if daemon._registry and daemon._active_being_id != prev_being_id:
-                prev_being = daemon._registry.get_being(prev_being_id) if prev_being_id else None
+                prev_being = (
+                    daemon._registry.get_being(prev_being_id) if prev_being_id else None
+                )
                 if prev_being:
                     await daemon._swap_being_context(prev_being)
